@@ -9,13 +9,23 @@ defmodule OpentelemetryStatifier do
   spans, span events, and span links. The library depends only on
   `opentelemetry_api`; hosts bring their own SDK and exporter.
 
-  Nothing is implemented yet. The design this package implements lives in
-  statifier-ex: `docs/opentelemetry.md` (span topology, context
-  propagation, cardinality) and st-ADR-0062 (packaging and scope).
+  `setup/0`/`setup/1` attach `OpentelemetryStatifier.Handler.handle_event/4`
+  to every name `Statifier.Session.Telemetry.events/0` returns, one
+  `:telemetry.attach/4` call per name under a per-event handler id, so a
+  raise in one event's handling never costs the others
+  (`deps/telemetry/src/telemetry.erl:109-116`). `teardown/0` detaches all of
+  them. Macrostep spans and attribute mapping land in later slices; today
+  every event reaches the handler and is silently ignored. The design this
+  package implements lives in statifier-ex: `docs/opentelemetry.md` (span
+  topology, context propagation, cardinality) and st-ADR-0062 (packaging and
+  scope).
   """
 
+  alias OpentelemetryStatifier.{Config, Handler}
+  alias Statifier.Session.Telemetry
+
   @doc """
-  Placeholder until the bridge's setup API lands.
+  Attaches the bridge with default options. Delegates to `setup/1`.
 
   ## Examples
 
@@ -23,8 +33,40 @@ defmodule OpentelemetryStatifier do
       :ok
 
   """
-  @spec setup() :: :ok
-  def setup do
-    :ok
+  @spec setup() :: :ok | {:error, term()}
+  def setup, do: setup([])
+
+  @doc """
+  Validates `opts` into a `OpentelemetryStatifier.Config.t()` and attaches
+  the bridge's handler to every name `Statifier.Session.Telemetry.events/0`
+  returns.
+
+  Idempotent: any ids this package already owns are detached first, so a
+  second call - with the same or different options - replaces the first
+  attachment rather than returning an "already exists" error.
+
+  Returns `{:error, reason}` from `OpentelemetryStatifier.Config.new/1`
+  without attaching anything when `opts` is invalid.
+  """
+  @spec setup(keyword()) :: :ok | {:error, term()}
+  def setup(opts) do
+    with {:ok, config} <- Config.new(opts) do
+      :ok = teardown()
+
+      Enum.each(Telemetry.events(), fn event ->
+        :telemetry.attach(handler_id(event), event, &Handler.handle_event/4, config)
+      end)
+    end
   end
+
+  @doc """
+  Detaches every handler id this package owns. Always returns `:ok`, even
+  when nothing was attached.
+  """
+  @spec teardown() :: :ok
+  def teardown do
+    Enum.each(Telemetry.events(), &:telemetry.detach(handler_id(&1)))
+  end
+
+  defp handler_id(event), do: {__MODULE__, event}
 end
