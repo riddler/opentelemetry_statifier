@@ -58,7 +58,7 @@ defmodule OpentelemetryStatifier.Handler do
   end
 
   # Closes the macrostep span whose `span_ref` matches, pairing on `span_ref`
-  # and never on `session_id` - ADR-0039 re-entry can have two spans open at
+  # and never on `session_id` - st-ADR-0039 re-entry can have two spans open at
   # once for one session, and `span_ref` is the only exact correlation
   # mechanism the event contract offers. A stop with no matching open span
   # (`:error`) is contract-legal, not a bug (a crash mid-span leaves an

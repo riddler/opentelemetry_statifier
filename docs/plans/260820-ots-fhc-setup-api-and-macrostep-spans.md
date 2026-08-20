@@ -764,9 +764,9 @@ repo's existing documents and the personal default.
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Full quality gate passes (`mix quality`) - the doctest in the rewritten
+- [x] Full quality gate passes (`mix quality`) - the doctest in the rewritten
       moduledoc still passes
-- [ ] `docs/adr/0003-handler-attach-and-span-table-mechanism.md` exists and
+- [x] `docs/adr/0003-handler-attach-and-span-table-mechanism.md` exists and
       is listed in `docs/adr/README.md`
 
 #### Manual Verification:
@@ -946,6 +946,23 @@ blocking here.
 - [ ] With no SDK configured, the same run produces no spans and no errors -
       the noop tracer path
 - [ ] No regressions: the 25 unmapped events still no-op
+
+**Implementation Note**: Use `mix quality --profile loop` between edits and
+`mix quality` as the phase gate. In interactive execution, pause here for
+the human to confirm the manual testing before moving to the next phase. In
+looped (`--loop`) execution, this phase's Automated Verification gates
+advancement automatically (via `/wurk:commit --auto`), and Manual
+Verification items are deferred and surfaced once at the end instead of
+blocking here.
+
+---
+
+### Phase 4
+
+- [ ] The ADR reads as a decision record, not a restatement of the design
+      note - it defers to statifier-ex on mapping and decides only mechanism
+- [ ] `mix docs` output reads correctly for a first-time consumer
+- [ ] Nothing in the ADR contradicts ADR-0002 or the upstream design note
 
 **Implementation Note**: Use `mix quality --profile loop` between edits and
 `mix quality` as the phase gate. In interactive execution, pause here for
