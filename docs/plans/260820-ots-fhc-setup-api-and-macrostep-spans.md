@@ -695,13 +695,13 @@ must turn it red.
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Full quality gate passes (`mix quality`)
-- [ ] `test/opentelemetry_statifier/handler_test.exs` covers all ten cases
+- [x] Full quality gate passes (`mix quality`)
+- [x] `test/opentelemetry_statifier/handler_test.exs` covers all ten cases
       above
-- [ ] Every new `test "..."` in the file has a `# sabotage:` line directly
+- [x] Every new `test "..."` in the file has a `# sabotage:` line directly
       above it, and the re-entry test's line reads "pair on session_id ->
       red"
-- [ ] Coverage stays above the 90% floor with `test/support/` excluded
+- [x] Coverage stays above the 90% floor with `test/support/` excluded
 
 #### Manual Verification:
 - [ ] Each sabotage line was produced by actually running the mutation it
@@ -921,6 +921,31 @@ blocking here.
       the table being recreated (empty), rather than the VM losing the table
       permanently
 - [ ] The `mod:` addition does not disturb a host that only wants the API
+
+**Implementation Note**: Use `mix quality --profile loop` between edits and
+`mix quality` as the phase gate. In interactive execution, pause here for
+the human to confirm the manual testing before moving to the next phase. In
+looped (`--loop`) execution, this phase's Automated Verification gates
+advancement automatically (via `/wurk:commit --auto`), and Manual
+Verification items are deferred and surfaced once at the end instead of
+blocking here.
+
+---
+
+### Phase 3
+
+- [ ] Each sabotage line was produced by actually running the mutation it
+      names and observing red, then reverting. The re-entry test is the one
+      that matters most: swapping `span_ref` pairing for `session_id`
+      pairing must genuinely fail it
+- [ ] A real `Statifier.Session` run in `iex` with the bridge set up and a
+      console exporter produces spans that look right end to end, including
+      an `:initialize` span whose late start is the known accepted skew
+- [ ] Span attributes render sensibly in a backend's UI (names, types,
+      the configuration array)
+- [ ] With no SDK configured, the same run produces no spans and no errors -
+      the noop tracer path
+- [ ] No regressions: the 25 unmapped events still no-op
 
 **Implementation Note**: Use `mix quality --profile loop` between edits and
 `mix quality` as the phase gate. In interactive execution, pause here for
