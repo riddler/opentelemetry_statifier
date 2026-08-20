@@ -1,0 +1,10 @@
+# mise config for opentelemetry_statifier: toolchain only.
+#
+#   mise install        provision the toolchain below
+#
+# Pinned to match statifier-ex, whose telemetry contract this package
+# bridges. Nothing here needs a JRE or that repo's corpus/spec tasks.
+
+[tools]
+erlang = "27.3"
+elixir = "1.18.3-otp-27"

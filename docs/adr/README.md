@@ -1,0 +1,12 @@
+# Architecture Decision Records
+
+| # | Decision | Status |
+|---|---|---|
+| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | accepted |
+| [0002](0002-adopts-the-upstream-bridge-contract.md) | This package is bound by the upstream bridge contract: public events only, family scope, the statifier-ex design note governs the mapping, git-pinned and unpublished until statifier is on Hex | accepted |
+
+New ADRs: next number, same three-section format (Context, Decision,
+Consequences). Pick the number against a freshly fetched remote. A bare
+`ADR-NNNN` cites this repository's own records; a cross-repo citation
+carries the owning repo's beads prefix (`st-ADR-0040` is statifier-ex's
+ADR-0040).
