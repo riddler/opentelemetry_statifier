@@ -387,10 +387,10 @@ is `async: false` because `:telemetry`'s handler registry is global.
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Full quality gate passes (`mix quality`), including credo `--strict`,
+- [x] Full quality gate passes (`mix quality`), including credo `--strict`,
       dialyzer, `warnings_as_errors` and the 90% coverage floor
-- [ ] `test/opentelemetry_statifier_test.exs` covers all seven cases above
-- [ ] Every new `test "..."` in the file has a `# sabotage:` line directly
+- [x] `test/opentelemetry_statifier_test.exs` covers all seven cases above
+- [x] Every new `test "..."` in the file has a `# sabotage:` line directly
       above it (a grep can decide this; whether the mutation was really run
       is the manual item below)
 
@@ -883,3 +883,31 @@ Two remain genuinely open, both upstream, and **neither blocks this plan**:
   ids; also the unowned-table anti-pattern), `otel_telemetry.erl` (the
   catch-all defensive clause shape)
 - Bead: `ots-fhc`; siblings `ots-j82`, `ots-lt6`, `ots-6ns`; epic `ots-8wp`
+
+## Deferred Manual Verification
+
+Manual verification items are deferred during looped (--loop) execution and
+surfaced here once, rather than blocking after each phase. Confirm these
+before considering the plan fully landed.
+
+### Phase 1
+
+- [ ] Each sabotage line was produced by actually breaking the `lib/` code
+      it names, running the suite, observing red, and reverting - the
+      comment is the record of that, not a substitute for it
+- [ ] The `{:error, ...}` shapes read usefully at a host's call site
+- [ ] `iex -S mix` then `OpentelemetryStatifier.setup()` followed by
+      `:telemetry.list_handlers([:statifier])` shows 27 entries with the
+      expected id shape
+- [ ] No regressions: the package still starts in a host that never calls
+      `setup/1`
+
+**Implementation Note**: Use `mix quality --profile loop` between edits and
+`mix quality` as the phase gate. In interactive execution, pause here for
+the human to confirm the manual testing before moving to the next phase. In
+looped (`--loop`) execution, this phase's Automated Verification gates
+advancement automatically (via `/wurk:commit --auto`), and Manual
+Verification items are deferred and surfaced once at the end instead of
+blocking here.
+
+---
