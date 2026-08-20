@@ -7,8 +7,11 @@ libraries emit `:telemetry` events, this package turns them into
 OpenTelemetry spans, span events, and span links. It depends only on
 `opentelemetry_api`; hosts bring their own SDK and exporter.
 
-**Status: design phase.** Nothing is implemented yet. The design this
-package implements is recorded in statifier-ex:
+**Status: early implementation.** `setup/1` attaches to every event
+`Statifier.Session.Telemetry.events/0` names and turns a macrostep's
+`:start`/`:stop` pair into one `statifier.macrostep` span; the effect and
+trace events, span links, and the datamodel-values opt-in are not mapped
+yet. The design this package implements is recorded in statifier-ex:
 
 - [`docs/opentelemetry.md`](https://github.com/riddler/statifier-ex/blob/main/docs/opentelemetry.md) -
   span topology, context propagation, attribute mapping, cardinality
@@ -38,6 +41,32 @@ def deps do
   ]
 end
 ```
+
+## Usage
+
+Call `setup/0` (or `setup/1` with options) once, typically at application
+start, after your host has configured its own OpenTelemetry SDK and
+exporter:
+
+```elixir
+:ok = OpentelemetryStatifier.setup()
+
+# or, with options:
+:ok = OpentelemetryStatifier.setup(record_datamodel_values: false)
+```
+
+This attaches a handler to every event the statifier telemetry contract
+emits. Each statechart macrostep becomes a `statifier.macrostep` span,
+carrying `statifier.session_id`, `statifier.trigger`, `statifier.outcome`,
+and the macrostep's counters and resulting configuration as attributes.
+Call `teardown/0` to detach everything, for example between test cases:
+
+```elixir
+:ok = OpentelemetryStatifier.teardown()
+```
+
+With no SDK started, the bridge is a cheap no-op: spans go through a
+no-op tracer and nothing is exported.
 
 ## License
 

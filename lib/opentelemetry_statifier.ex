@@ -14,11 +14,20 @@ defmodule OpentelemetryStatifier do
   `:telemetry.attach/4` call per name under a per-event handler id, so a
   raise in one event's handling never costs the others
   (`deps/telemetry/src/telemetry.erl:109-116`). `teardown/0` detaches all of
-  them. Macrostep spans and attribute mapping land in later slices; today
-  every event reaches the handler and is silently ignored. The design this
-  package implements lives in statifier-ex: `docs/opentelemetry.md` (span
-  topology, context propagation, cardinality) and st-ADR-0062 (packaging and
-  scope).
+  them.
+
+  Today the handler turns one event pair into spans: a macrostep `:start`
+  opens a root span named `statifier.macrostep`, and the `:stop` whose
+  `span_ref` matches closes it, carrying `statifier.session_id`,
+  `statifier.trigger`, `statifier.outcome`, the macrostep's counters, and
+  its resulting `statifier.configuration` as attributes
+  (`OpentelemetryStatifier.Handler`, `OpentelemetryStatifier.SpanTable`).
+  The other 25 events reach the handler and are silently ignored for now -
+  the effect and trace events, span links, and the datamodel-values opt-in
+  are later slices' work (see `docs/adr/0003-handler-attach-and-span-table-mechanism.md`).
+  The design this package implements lives in statifier-ex:
+  `docs/opentelemetry.md` (span topology, context propagation, cardinality)
+  and st-ADR-0062 (packaging and scope).
   """
 
   alias OpentelemetryStatifier.{Config, Handler}
