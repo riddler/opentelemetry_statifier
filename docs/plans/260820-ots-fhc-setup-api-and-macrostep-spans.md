@@ -512,12 +512,12 @@ named (one test against `OpentelemetryStatifier.SpanTable`).
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Full quality gate passes (`mix quality`)
-- [ ] `test/opentelemetry_statifier/span_table_test.exs` covers all five
+- [x] Full quality gate passes (`mix quality`)
+- [x] `test/opentelemetry_statifier/span_table_test.exs` covers all five
       cases above and passes with `async: true`
-- [ ] Every new `test "..."` in the file has a `# sabotage:` line directly
+- [x] Every new `test "..."` in the file has a `# sabotage:` line directly
       above it
-- [ ] Dialyzer accepts the `OpenTelemetry.span_ctx()` types in the struct
+- [x] Dialyzer accepts the `OpenTelemetry.span_ctx()` types in the struct
 
 #### Manual Verification:
 - [ ] Each sabotage line was produced by actually running the mutation it
@@ -901,6 +901,26 @@ before considering the plan fully landed.
       expected id shape
 - [ ] No regressions: the package still starts in a host that never calls
       `setup/1`
+
+**Implementation Note**: Use `mix quality --profile loop` between edits and
+`mix quality` as the phase gate. In interactive execution, pause here for
+the human to confirm the manual testing before moving to the next phase. In
+looped (`--loop`) execution, this phase's Automated Verification gates
+advancement automatically (via `/wurk:commit --auto`), and Manual
+Verification items are deferred and surfaced once at the end instead of
+blocking here.
+
+---
+
+### Phase 2
+
+- [ ] Each sabotage line was produced by actually running the mutation it
+      names and observing red, then reverting
+- [ ] `iex -S mix` shows the table present at boot without calling `setup/1`
+- [ ] Killing the `SpanTable` process shows the supervisor restarting it and
+      the table being recreated (empty), rather than the VM losing the table
+      permanently
+- [ ] The `mod:` addition does not disturb a host that only wants the API
 
 **Implementation Note**: Use `mix quality --profile loop` between edits and
 `mix quality` as the phase gate. In interactive execution, pause here for
