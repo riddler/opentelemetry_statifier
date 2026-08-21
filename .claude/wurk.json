@@ -56,6 +56,7 @@
 
   "tmux": {
     "session": "opentelemetry_statifier",
+    "permission_mode": "skip-permissions",
     "model": "opus"
   },
 
