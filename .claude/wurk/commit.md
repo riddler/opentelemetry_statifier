@@ -65,13 +65,12 @@ reason to move it. Report the finding and stop. `.quality.exs` records why
 this gate is deliberately smaller than statifier-ex's; a change that moves a
 value without moving its reason is incomplete regardless of who asked.
 
-## Gate attestation is not wired up yet
+## Gate attestation: `mix gate.verify`, provided by the statifier dep
 
-The manifest declares no `gate.attest` command, so an unattended
-(`/wurk:commit --auto`) run records `attested: false` and refuses to advance.
-That is the known state, not a fault to work around: adopting
-`mix gate.verify` (the family's one adoptable verifier - it adds no gate
-stage) and wiring `gate.attest` to it is bead `ots-4l6`, which is pending a
-ruling, not adopted. Until that is resolved, review the full gate output
-directly in interactive runs, and treat an `--auto` refusal on attestation as
-expected - report it, do not fake an attestation.
+The manifest wires `gate.attest` to `mix gate.verify` (bead `ots-4l6`,
+adopted under the family ruling in st-hcgl: use the dep-provided task, no
+local copy). The task ships in the pinned statifier dep; this repo carries
+no copy of it and adds no gate stage. An unattended (`/wurk:commit --auto`)
+run advances only on `attested: true` - a run that reports `attested: false`
+was narrowed (profile, scope, or a skipped stage) and is refused as before.
+Never fake an attestation; re-run the bare command instead.
