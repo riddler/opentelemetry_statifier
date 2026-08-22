@@ -96,6 +96,22 @@ be reverse-engineered from the code later.
   a known, accepted gap, not a bug: ots-lt6 exists specifically to sweep
   these orphans and end them with an error status, and this plan
   deliberately does not duplicate that work.
+- **The `:initialize` macrostep span understates its own duration.** Taking
+  `start_time` from the event's own `monotonic_time` is exact for every
+  trigger whose `:start` and `:stop` bracket the work - measured on a real
+  session, an `event`-triggered span's wall time and its
+  `statifier.duration` measurement agree to within 84ns. `:initialize` is
+  the exception the design note already accepts: statifier emits its
+  `:start` from `init/1` and its `:stop` from the following
+  `handle_continue`, so the span opens after part of the work it covers and
+  reads materially short (-57% on that same run). The alternative is
+  back-calculating every span's start from `end_time - duration` - the
+  contrib family's usual shape - which trades every other span's accuracy
+  for this one's. This record keeps the accurate case and documents the
+  skew in the README and `OpentelemetryStatifier`'s moduledoc rather than
+  correcting it. What would reopen it: statifier moving the `:initialize`
+  `:start` emission, or the contract gaining a start-time field for it
+  upstream.
 - Nothing here revisits the design note's span topology or attribute
   mapping; those stay governed by ADR-0002 decision 3. What would reopen
   this record: the design note changing how macrostep spans are paired or

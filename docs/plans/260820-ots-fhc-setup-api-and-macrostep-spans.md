@@ -850,6 +850,8 @@ Two remain genuinely open, both upstream, and **neither blocks this plan**:
    st-ADR-0061 and is not taken here. Until it moves, anyone reading
    `deps/statifier/docs/` for the design note will not find it.
 
+   **Tracked (2026-08-21):** filed as `ots-nxl`.
+
 2. **The design note enumerates four `trigger` values, the code emits five.**
    `docs/opentelemetry.md:73-74` upstream lists
    `initialize | event | cancel | internal`; the pinned specs
@@ -859,6 +861,8 @@ Two remain genuinely open, both upstream, and **neither blocks this plan**:
    enumerate five. Under CLAUDE.md's cross-repo table the correction is
    statifier-ex's to make, and it should be raised there rather than
    patched around here.
+
+   **Tracked (2026-08-21):** filed as `ots-2bs` (label `upstream`).
 
 ## References
 
@@ -892,14 +896,14 @@ before considering the plan fully landed.
 
 ### Phase 1
 
-- [ ] Each sabotage line was produced by actually breaking the `lib/` code
+- [x] Each sabotage line was produced by actually breaking the `lib/` code
       it names, running the suite, observing red, and reverting - the
       comment is the record of that, not a substitute for it
-- [ ] The `{:error, ...}` shapes read usefully at a host's call site
-- [ ] `iex -S mix` then `OpentelemetryStatifier.setup()` followed by
+- [x] The `{:error, ...}` shapes read usefully at a host's call site
+- [x] `iex -S mix` then `OpentelemetryStatifier.setup()` followed by
       `:telemetry.list_handlers([:statifier])` shows 27 entries with the
       expected id shape
-- [ ] No regressions: the package still starts in a host that never calls
+- [x] No regressions: the package still starts in a host that never calls
       `setup/1`
 
 **Implementation Note**: Use `mix quality --profile loop` between edits and
@@ -914,13 +918,13 @@ blocking here.
 
 ### Phase 2
 
-- [ ] Each sabotage line was produced by actually running the mutation it
+- [x] Each sabotage line was produced by actually running the mutation it
       names and observing red, then reverting
-- [ ] `iex -S mix` shows the table present at boot without calling `setup/1`
-- [ ] Killing the `SpanTable` process shows the supervisor restarting it and
+- [x] `iex -S mix` shows the table present at boot without calling `setup/1`
+- [x] Killing the `SpanTable` process shows the supervisor restarting it and
       the table being recreated (empty), rather than the VM losing the table
       permanently
-- [ ] The `mod:` addition does not disturb a host that only wants the API
+- [x] The `mod:` addition does not disturb a host that only wants the API
 
 **Implementation Note**: Use `mix quality --profile loop` between edits and
 `mix quality` as the phase gate. In interactive execution, pause here for
@@ -934,18 +938,18 @@ blocking here.
 
 ### Phase 3
 
-- [ ] Each sabotage line was produced by actually running the mutation it
+- [x] Each sabotage line was produced by actually running the mutation it
       names and observing red, then reverting. The re-entry test is the one
       that matters most: swapping `span_ref` pairing for `session_id`
       pairing must genuinely fail it
-- [ ] A real `Statifier.Session` run in `iex` with the bridge set up and a
+- [x] A real `Statifier.Session` run in `iex` with the bridge set up and a
       console exporter produces spans that look right end to end, including
       an `:initialize` span whose late start is the known accepted skew
-- [ ] Span attributes render sensibly in a backend's UI (names, types,
+- [x] Span attributes render sensibly in a backend's UI (names, types,
       the configuration array)
-- [ ] With no SDK configured, the same run produces no spans and no errors -
+- [x] With no SDK configured, the same run produces no spans and no errors -
       the noop tracer path
-- [ ] No regressions: the 25 unmapped events still no-op
+- [x] No regressions: the 25 unmapped events still no-op
 
 **Implementation Note**: Use `mix quality --profile loop` between edits and
 `mix quality` as the phase gate. In interactive execution, pause here for
@@ -959,10 +963,10 @@ blocking here.
 
 ### Phase 4
 
-- [ ] The ADR reads as a decision record, not a restatement of the design
+- [x] The ADR reads as a decision record, not a restatement of the design
       note - it defers to statifier-ex on mapping and decides only mechanism
-- [ ] `mix docs` output reads correctly for a first-time consumer
-- [ ] Nothing in the ADR contradicts ADR-0002 or the upstream design note
+- [x] `mix docs` output reads correctly for a first-time consumer
+- [x] Nothing in the ADR contradicts ADR-0002 or the upstream design note
 
 **Implementation Note**: Use `mix quality --profile loop` between edits and
 `mix quality` as the phase gate. In interactive execution, pause here for

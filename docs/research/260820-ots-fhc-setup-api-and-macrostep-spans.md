@@ -743,6 +743,9 @@ Recorded rather than asked - no human was available during this pass.
    will not find it. Whether to advance the pin is a human call under
    st-ADR-0061.
 
+   **Tracked (2026-08-21):** filed as `ots-nxl`. Still open - the call is a
+   human one under st-ADR-0061 and is not taken here.
+
 2. **`trigger` has five values, not four.** The design note (upstream
    `docs/opentelemetry.md:73-74`) enumerates
    `initialize | event | cancel | internal`, and so does st-ADR-0040's
@@ -754,6 +757,9 @@ Recorded rather than asked - no human was available during this pass.
    nothing breaks - but any test or doc here that enumerates the domain
    should use five, and the upstream note's list is stale. Under the CLAUDE.md
    cross-repo table this is statifier-ex's to correct.
+
+   **Tracked (2026-08-21):** filed as `ots-2bs` (label `upstream`; the work
+   lands in statifier-ex). Still open here.
 
 3. **Where setup options live at event time - prior art answers this, but the
    validation library is still a choice.** The design note names
@@ -767,6 +773,14 @@ Recorded rather than asked - no human was available during this pass.
    dependency. Whether to add one for a two-key option map is a call for the
    plan.
 
+   **Settled (2026-08-21):** Options travel in the `:telemetry.attach/4` `Config`
+   argument as the family does it, but validated by a hand-rolled
+   `Config.new/1` returning `{:ok, t} | {:error, reason}` - no `nimble_options`
+   dependency for a two-key option map. Unknown keys are rejected rather than
+   ignored, since a typo'd `record_datamodel_value` silently doing nothing is
+   precisely the failure the cardinality policy cannot absorb. ADR-0003
+   decision 1.
+
 4. **`setup/1` called twice returns `{:error, :already_exists}`, and the
    family genuinely disagrees on what to do about it.** Oban discards the
    result and returns `:ok`; ecto matches it and returns a bare `:error`
@@ -778,6 +792,14 @@ Recorded rather than asked - no human was available during this pass.
    package wants a testable teardown it should probably have a real one. The
    bead does not mention `detach/0` and no upstream record requires it.
 
+   **Settled (2026-08-21):** `setup/1` is idempotent and returns `:ok` - it calls
+   `teardown/0` before re-attaching rather than surfacing
+   `{:error, :already_exists}`, so neither ecto's nor bandit's `@spec`
+   contradiction is reproduced. A real `teardown/0` ships in `lib/` rather than
+   being rewritten in each test's `on_exit`, following `opentelemetry_absinthe`.
+   Verified at runtime during /wurk:verify: a second `setup/0` leaves 27 handlers,
+   not 54. ADR-0003 decisions 3 and 7.
+
 5. **Whether one handler id or several is right.** `attach_many/4`'s
    all-or-nothing detach is the argument for splitting (a malformed
    `:datamodel_init` should not take the macrostep spans down with it); one
@@ -785,6 +807,13 @@ Recorded rather than asked - no human was available during this pass.
    `attach_many/4` for three events; phoenix mixes both in one `setup`; oban
    and ecto use one id per event. Defensive total clauses make the split less
    necessary either way. Plan-time decision.
+
+   **Settled (2026-08-21):** Several - one `:telemetry.attach/4` id per event
+   name, 27 in total. `attach_many/4`'s detach is all-or-nothing across the name
+   list, so a raise in one clause would otherwise cost the whole bridge for the
+   life of the VM. `teardown/0` gives back the single detach handle that argued
+   for one id. Verified at runtime during /wurk:verify: 27 handlers, 27 unique
+   ids. ADR-0003 decision 2.
 
 6. **The ETS table's owner process is unspecified by this slice.** The design
    note says the bridge "owns" the table; ots-lt6 owns the cleanup and sweep.
@@ -797,11 +826,27 @@ Recorded rather than asked - no human was available during this pass.
    a GenServer is a supervision-tree question this bead does not name, and
    deciding it here constrains ots-lt6, so it is worth deciding deliberately.
 
+   **Settled (2026-08-21):** A supervised `SpanTable` GenServer owns it, started
+   from a new `mod:` in `mix.exs`, with the table name passed through the handler
+   `Config` so tests inject their own - `OpentelemetryRedix.ConnectionTracker`'s
+   shape, not `opentelemetry_ecto`'s ownerless one. Verified at runtime during
+   /wurk:verify: the table exists at boot with no `setup/1` call, and killing the
+   owner has the supervisor restart it with the table recreated empty. ADR-0003
+   decision 4.
+
 7. **Whether `statifier.session_id` alone keys the table.** The design note
    says "the last-emitted span context per `session_id`", but the open span
    is per `span_ref` and re-entry means a session can have two open at once.
    The table probably needs two logical slots with different keys, which is a
    shape decision this slice makes and ots-j82 reads.
+
+   **Settled (2026-08-21):** It does not. The table carries two tagged slots
+   with different keys - `{:span, span_ref}` for the open span and
+   `{:last_span_ctx, session_id}` for the last-emitted context - with
+   `session_id` denormalized onto the span row so ots-lt6 can sweep by session.
+   Verified at runtime during /wurk:verify: after a start/stop pair the open-span
+   row is gone and only the `{:last_span_ctx, _}` row remains. ADR-0003
+   decision 6.
 
 8. **Whether to depend on `opentelemetry_telemetry` at all.** It is the
    utility oban, phoenix LiveView, cowboy and broadway all use for exactly
@@ -818,6 +863,15 @@ Recorded rather than asked - no human was available during this pass.
    It would also add a runtime dependency ADR-0002 decision 5 does not
    currently contemplate.
 
+   **Settled (2026-08-21):** No. `opentelemetry_telemetry` keys on the process
+   dictionary via `metadata.telemetry_span_context` or a per-tracer stack, and
+   statifier sets neither - it puts its own reference in `metadata.span_ref`.
+   The utility would fall back to the stack heuristic its own moduledoc calls a
+   way "to lessen the likelihood" of closing the wrong span, where `span_ref` is
+   exact. It would also add a runtime dependency ADR-0002 decision 5 does not
+   contemplate. Rolled by hand; the omission is now explained in ADR-0003
+   decision 5 rather than left silent.
+
 9. **The `record_exception` asymmetry, for ots-lt6's error status.**
    `OpenTelemetry.Span.record_exception/2,3,4` is an Elixir-level
    reimplementation over `add_event`, not a delegate to Erlang's
@@ -826,6 +880,12 @@ Recorded rather than asked - no human was available during this pass.
    `Span.set_status(ctx, OpenTelemetry.status(:error, msg))` instead. Noted
    here because this slice decides what the table stores, and a span_ctx is
    what that call needs.
+
+   **Settled (2026-08-21):** Answered structurally rather than chosen. The
+   table stores the `span_ctx` itself (`SpanEntry.span_ctx`), which is exactly
+   the argument `Span.set_status/2` takes, so ots-lt6 can end an orphan with an
+   error status without ever needing an `Exception.t()`. No `record_exception`
+   call is made in this slice. Recorded in ADR-0003 decision 6.
 
 ## Out of scope for this bead
 
