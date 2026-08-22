@@ -43,10 +43,17 @@ defmodule OpentelemetryStatifier do
   links: one to the same session's previous macrostep span, and - on a
   child session's `:initialize` macrostep - one to the invoking parent's
   macrostep span, resolved from the `:init` event's `invoked_by`.
-  `:terminate` is ignored today; sweeping crashed sessions' rows is
-  ots-lt6's slice. The design this package implements lives in
-  statifier-ex: `docs/opentelemetry.md` (span topology, context
-  propagation, cardinality) and st-ADR-0062 (packaging and scope).
+  The bridge does not leak on crashes: `:terminate` removes the session's
+  rows from the span table (ending a still-open macrostep span with an
+  error status), and because `:terminate` does not fire on a brutal kill,
+  `OpentelemetryStatifier.SpanTable` also sweeps on a timer, ending the
+  orphaned spans of sessions whose process no longer exists the same way.
+  With `trace: false` the core emits no trace-family events at all, so the
+  bridge degrades to macrostep-grained spans with effect-level span events
+  and needs no configuration of its own. The design this package
+  implements lives in statifier-ex: `docs/opentelemetry.md` (span
+  topology, context propagation, cardinality, failure tolerance) and
+  st-ADR-0062 (packaging and scope).
   """
 
   alias OpentelemetryStatifier.{Config, Handler}
