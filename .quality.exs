@@ -20,6 +20,9 @@
 # --strict are the gate until this package has a reason to deviate from one.
 
 [
+  format: [
+    check: true
+  ],
   compile: [
     warnings_as_errors: true
   ],
