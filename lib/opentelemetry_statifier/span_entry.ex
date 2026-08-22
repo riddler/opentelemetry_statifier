@@ -5,8 +5,10 @@ defmodule OpentelemetryStatifier.SpanEntry do
   event whose `span_ref` matches.
 
   `started_at` is the `monotonic_time` the span was opened with -
-  ots-lt6's sweep needs an age, and recomputing it from the span ctx is
-  not possible through the API.
+  `SpanTable.fetch_innermost_open_span/2` orders a session's open spans
+  by it, and recomputing it from the span ctx is not possible through
+  the API. (The sweep turned out not to need an age: it keys on session
+  process liveness, via the table's `:session_pid` rows.)
   """
 
   @enforce_keys [:session_id, :span_ctx, :trigger, :started_at]

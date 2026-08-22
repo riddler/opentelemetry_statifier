@@ -13,11 +13,12 @@ defmodule OpentelemetryStatifier.Handler do
   clause exhaustiveness - a final catch-all clause, matching
   `otel_telemetry.erl`'s own `handle_event(_, _, _, _) -> ok.` and ecto's
   `defp query_opts(_), do: %{}` - not rescue-to-default. Every clause here
-  (the two macrostep clauses, the `:init` link-capture clause, and the
-  span-event clauses for the effect/trace families plus
-  `:interpret`/`:unroutable`/`:halt`) must bind only the keys it needs in
-  its head, so a malformed or unrecognised event falls through to the
-  catch-all and drops the span (or span event) rather than raising.
+  (the two macrostep clauses, the `:init` link-capture clause, the
+  `:terminate` cleanup clause, and the span-event clauses for the
+  effect/trace families plus `:interpret`/`:unroutable`/`:halt`) must bind
+  only the keys it needs in its head, so a malformed or unrecognised event
+  falls through to the catch-all and drops the span (or span event) rather
+  than raising.
   """
 
   require OpenTelemetry.Tracer
@@ -58,6 +59,11 @@ defmodule OpentelemetryStatifier.Handler do
       trigger: trigger,
       started_at: monotonic_time
     })
+
+    # `:telemetry.execute/3` runs handlers in the emitting process, so
+    # `self()` here is the session process - recorded for the sweep's
+    # liveness check, since `:terminate` does not fire on a brutal kill.
+    SpanTable.put_session_pid(table, session_id, self())
 
     :ok
   end
@@ -103,6 +109,11 @@ defmodule OpentelemetryStatifier.Handler do
         %Config{table: table}
       )
       when is_binary(session_id) and is_binary(parent_session_id) do
+    # The child's `:init` also runs in the child's own process, and the
+    # `:invoke_parent` row parked below must be sweepable if the child is
+    # brutally killed before its `:initialize` macrostep consumes it.
+    SpanTable.put_session_pid(table, session_id, self())
+
     case SpanTable.fetch_innermost_open_span(table, parent_session_id) do
       {:ok, %SpanEntry{span_ctx: parent_span_ctx}} ->
         SpanTable.put_invoke_parent(table, session_id, parent_span_ctx)
@@ -145,8 +156,27 @@ defmodule OpentelemetryStatifier.Handler do
     add_span_event(config, session_id, "statifier.#{kind}", measurements, metadata)
   end
 
-  # `:terminate`, and any malformed measurements/metadata on any name
-  # (including the clauses above), fall straight through here.
+  # `:terminate` never becomes a span or a span event - it is the cleanup
+  # hook: every ETS row the session owns is removed, and a macrostep span
+  # still open at terminate (a crash where `terminate/2` still ran) is
+  # ended with an error status rather than silently dropped, matching what
+  # the sweep does for the brutal-kill case `:terminate` cannot cover.
+  def handle_event(
+        [:statifier, :session, :terminate],
+        _measurements,
+        %{session_id: session_id},
+        %Config{table: table}
+      )
+      when is_binary(session_id) do
+    SpanTable.delete_session(
+      table,
+      session_id,
+      "statifier session terminated with the macrostep span still open"
+    )
+  end
+
+  # Any malformed measurements/metadata on any name (including the clauses
+  # above) falls straight through here.
   def handle_event(_event, _measurements, _metadata, _config), do: :ok
 
   # A span event with no open macrostep span to land on is dropped, not an

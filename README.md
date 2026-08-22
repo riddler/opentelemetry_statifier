@@ -14,8 +14,10 @@ that fires in between - the eleven effect events, the nine trace events,
 `:interpret`, `:unroutable`, `:halt` - becomes a span event on it, and
 each span links to the same session's previous macrostep and (for an
 invoked child's `:initialize` macrostep) to the invoking parent's open
-span. Not implemented yet: sweeping the rows a crashed session leaves
-behind. The design this package implements is recorded in statifier-ex:
+span. `:terminate` cleans up the session's rows, and a periodic sweep
+ends the spans a brutally killed session orphans with an error status
+rather than leaking them. The design this package implements is
+recorded in statifier-ex:
 
 - [`docs/opentelemetry.md`](https://github.com/riddler/statifier-ex/blob/main/docs/opentelemetry.md) -
   span topology, context propagation, attribute mapping, cardinality

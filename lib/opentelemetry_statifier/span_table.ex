@@ -19,13 +19,24 @@ defmodule OpentelemetryStatifier.SpanTable do
       {{:span, span_ref},             session_id, %SpanEntry{}}
       {{:last_span_ctx, session_id},  session_id, span_ctx}
       {{:invoke_parent, session_id},  session_id, span_ctx}
+      {{:session_pid, session_id},    session_id, pid}
 
   The `:invoke_parent` row is written when a child session's `:init` event
   names an `invoked_by` parent whose macrostep span is open at that
   moment, and consumed (removed) by the child's own `:initialize`
   macrostep start, which turns it into a span link.
 
-  `session_id` is duplicated into element 2 of both row shapes so a
+  The `:session_pid` row records the session process behind `session_id` -
+  the handler runs inside the session process, so `self()` at event time
+  is that pid. It exists for the sweep: `:terminate` does not fire on a
+  brutal kill, so `sweep/1` walks these rows and, for every session whose
+  process is no longer alive, ends any still-open macrostep spans with an
+  error status and deletes all the session's rows - the design note's
+  "sweeps entries whose sessions no longer exist rather than trusting the
+  event alone". This `GenServer` runs the sweep on a timer; tests call
+  `sweep/1` directly.
+
+  `session_id` is duplicated into element 2 of every row shape so a
   sweeper can find every row for a session with one
   `:ets.match_object/2` or `:ets.match_delete/2`, without decoding either
   row's structured value.
@@ -34,6 +45,11 @@ defmodule OpentelemetryStatifier.SpanTable do
   use GenServer
 
   alias OpentelemetryStatifier.SpanEntry
+
+  # One minute balances leak lifetime against wakeup cost: an orphaned row
+  # is three tuples, so a longer leak costs almost nothing, and a sweep of
+  # an empty table is one `match_object` call.
+  @sweep_interval :timer.minutes(1)
 
   @doc false
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -44,7 +60,19 @@ defmodule OpentelemetryStatifier.SpanTable do
   @impl GenServer
   def init(name) do
     new_table(name)
+    schedule_sweep()
     {:ok, name}
+  end
+
+  @impl GenServer
+  def handle_info(:sweep, name) do
+    sweep(name)
+    schedule_sweep()
+    {:noreply, name}
+  end
+
+  defp schedule_sweep do
+    Process.send_after(self(), :sweep, @sweep_interval)
   end
 
   @doc """
@@ -159,5 +187,59 @@ defmodule OpentelemetryStatifier.SpanTable do
       [{{:last_span_ctx, ^session_id}, _session_id, span_ctx}] -> {:ok, span_ctx}
       [] -> :error
     end
+  end
+
+  @doc """
+  Records `pid` as the session process behind `session_id`, for the
+  sweep's liveness check. Idempotent - the table is a `:set`, so a
+  session's row is written once per macrostep at no accumulating cost.
+  """
+  @spec put_session_pid(atom(), String.t(), pid()) :: :ok
+  def put_session_pid(table, session_id, pid) do
+    :ets.insert(table, {{:session_pid, session_id}, session_id, pid})
+    :ok
+  end
+
+  @doc """
+  Removes every row `session_id` owns, first ending any still-open
+  macrostep spans with an error status carrying `orphan_message` - an
+  orphan is reported, never silently dropped. Called by the handler's
+  `:terminate` clause and by `sweep/1` for sessions whose process died
+  without a `:terminate`.
+  """
+  @spec delete_session(atom(), String.t(), String.t()) :: :ok
+  def delete_session(table, session_id, orphan_message) do
+    table
+    |> :ets.match_object({{:span, :_}, session_id, :_})
+    |> Enum.each(fn {_key, _session_id, %SpanEntry{span_ctx: span_ctx}} ->
+      OpenTelemetry.Span.set_status(span_ctx, OpenTelemetry.status(:error, orphan_message))
+      OpenTelemetry.Span.end_span(span_ctx)
+    end)
+
+    :ets.match_delete(table, {:_, session_id, :_})
+    :ok
+  end
+
+  @doc """
+  Ends the orphans a brutal kill leaves behind: for every `:session_pid`
+  row whose process is no longer alive, delegates to `delete_session/3`.
+  A live session's rows are never touched - an open span on a live
+  session is just a macrostep in flight, whatever its age.
+  """
+  @spec sweep(atom()) :: :ok
+  def sweep(table) do
+    table
+    |> :ets.match_object({{:session_pid, :_}, :_, :_})
+    |> Enum.each(fn {_key, session_id, pid} ->
+      if not Process.alive?(pid) do
+        delete_session(
+          table,
+          session_id,
+          "statifier session process died with the macrostep span still open"
+        )
+      end
+    end)
+
+    :ok
   end
 end
