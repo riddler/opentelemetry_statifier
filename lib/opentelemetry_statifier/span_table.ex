@@ -16,8 +16,14 @@ defmodule OpentelemetryStatifier.SpanTable do
   Row shapes, fixed here because ots-j82 and ots-lt6 both read them
   directly against the table name carried in `OpentelemetryStatifier.Config`:
 
-      {{:span, span_ref},            session_id, %SpanEntry{}}
-      {{:last_span_ctx, session_id}, session_id, span_ctx}
+      {{:span, span_ref},             session_id, %SpanEntry{}}
+      {{:last_span_ctx, session_id},  session_id, span_ctx}
+      {{:invoke_parent, session_id},  session_id, span_ctx}
+
+  The `:invoke_parent` row is written when a child session's `:init` event
+  names an `invoked_by` parent whose macrostep span is open at that
+  moment, and consumed (removed) by the child's own `:initialize`
+  macrostep start, which turns it into a span link.
 
   `session_id` is duplicated into element 2 of both row shapes so a
   sweeper can find every row for a session with one
@@ -76,6 +82,57 @@ defmodule OpentelemetryStatifier.SpanTable do
       [{{:span, ^span_ref}, _session_id, entry}] ->
         :ets.delete(table, {:span, span_ref})
         {:ok, entry}
+
+      [] ->
+        :error
+    end
+  end
+
+  @doc """
+  Fetches the innermost open span for `session_id` - the entry with the
+  greatest `started_at` among the session's open rows, since ADR-0039
+  re-entry can hold two spans open at once and an intra-macrostep event
+  belongs to the most recently opened one. Returns `:error` when the
+  session has no open span (an effect event racing a crash's cleanup is
+  contract-legal, not a bug).
+  """
+  @spec fetch_innermost_open_span(atom(), String.t()) :: {:ok, SpanEntry.t()} | :error
+  def fetch_innermost_open_span(table, session_id) do
+    case :ets.match_object(table, {{:span, :_}, session_id, :_}) do
+      [] ->
+        :error
+
+      rows ->
+        {_key, _session_id, entry} =
+          Enum.max_by(rows, fn {_key, _session_id, %SpanEntry{started_at: started_at}} ->
+            started_at
+          end)
+
+        {:ok, entry}
+    end
+  end
+
+  @doc """
+  Records the parent macrostep span context a child session's
+  `:initialize` macrostep will link to, keyed by the child's `session_id`.
+  """
+  @spec put_invoke_parent(atom(), String.t(), OpenTelemetry.span_ctx()) :: :ok
+  def put_invoke_parent(table, session_id, span_ctx) do
+    :ets.insert(table, {{:invoke_parent, session_id}, session_id, span_ctx})
+    :ok
+  end
+
+  @doc """
+  Looks up and removes the invoke-parent span context stored for
+  `session_id`, returning `{:ok, span_ctx}` on a hit or `:error` when no
+  parent was recorded - a session that was not invoked by anyone.
+  """
+  @spec take_invoke_parent(atom(), String.t()) :: {:ok, OpenTelemetry.span_ctx()} | :error
+  def take_invoke_parent(table, session_id) do
+    case :ets.lookup(table, {:invoke_parent, session_id}) do
+      [{{:invoke_parent, ^session_id}, _session_id, span_ctx}] ->
+        :ets.delete(table, {:invoke_parent, session_id})
+        {:ok, span_ctx}
 
       [] ->
         :error

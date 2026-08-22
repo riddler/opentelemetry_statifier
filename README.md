@@ -8,10 +8,14 @@ OpenTelemetry spans, span events, and span links. It depends only on
 `opentelemetry_api`; hosts bring their own SDK and exporter.
 
 **Status: early implementation.** `setup/1` attaches to every event
-`Statifier.Session.Telemetry.events/0` names and turns a macrostep's
-`:start`/`:stop` pair into one `statifier.macrostep` span; the effect and
-trace events, span links, and the datamodel-values opt-in are not mapped
-yet. The design this package implements is recorded in statifier-ex:
+`Statifier.Session.Telemetry.events/0` names. A macrostep's
+`:start`/`:stop` pair becomes one `statifier.macrostep` span; everything
+that fires in between - the eleven effect events, the nine trace events,
+`:interpret`, `:unroutable`, `:halt` - becomes a span event on it, and
+each span links to the same session's previous macrostep and (for an
+invoked child's `:initialize` macrostep) to the invoking parent's open
+span. Not implemented yet: sweeping the rows a crashed session leaves
+behind. The design this package implements is recorded in statifier-ex:
 
 - [`docs/opentelemetry.md`](https://github.com/riddler/statifier-ex/blob/main/docs/opentelemetry.md) -
   span topology, context propagation, attribute mapping, cardinality
@@ -59,6 +63,22 @@ This attaches a handler to every event the statifier telemetry contract
 emits. Each statechart macrostep becomes a `statifier.macrostep` span,
 carrying `statifier.session_id`, `statifier.trigger`, `statifier.outcome`,
 and the macrostep's counters and resulting configuration as attributes.
+The effect and trace events that fire inside the macrostep land on the
+span as span events (`statifier.effect.send`, `statifier.trace.exit_set`,
+...), attributes mapped uniformly under the `statifier.` namespace: a
+resolved source location flattens to
+`statifier.source.line`/`statifier.source.column`, a configuration
+becomes a sorted string array, and the raw effect struct is never
+serialized. The two events that carry datamodel values
+(`:datamodel_change`, `:datamodel_init`) are recorded *without* those
+values unless you opt in with `record_datamodel_values: true` - nothing
+unbounded is exported by default.
+
+Each macrostep span is the root of its own trace. Span links stitch the
+traces together: every macrostep links to the same session's previous
+macrostep span, and an invoked child session's `:initialize` macrostep
+links to the parent macrostep span that was open when the child started.
+
 Call `teardown/0` to detach everything, for example between test cases:
 
 ```elixir
