@@ -22,6 +22,15 @@ defmodule OpentelemetryStatifier do
   `statifier.trigger`, `statifier.outcome`, the macrostep's counters, and
   its resulting `statifier.configuration` as attributes
   (`OpentelemetryStatifier.Handler`, `OpentelemetryStatifier.SpanTable`).
+  Span start times come from each event's own `monotonic_time`, so a
+  macrostep span's wall time tracks the `statifier.duration` measurement
+  closely - with one documented exception. Statifier emits the
+  `:initialize` macrostep's `:start` from the session's `init/1` and its
+  `:stop` from the following `handle_continue`, so that span opens after
+  some of the work it covers, and reads materially shorter than
+  `statifier.duration` reports. The skew is accepted rather than corrected;
+  see the README and `docs/adr/0003-handler-attach-and-span-table-mechanism.md`.
+
   The other 25 events reach the handler and are silently ignored for now -
   the effect and trace events, span links, and the datamodel-values opt-in
   are later slices' work (see `docs/adr/0003-handler-attach-and-span-table-mechanism.md`).

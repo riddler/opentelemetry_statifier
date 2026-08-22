@@ -68,6 +68,23 @@ Call `teardown/0` to detach everything, for example between test cases:
 With no SDK started, the bridge is a cheap no-op: spans go through a
 no-op tracer and nothing is exported.
 
+### The `:initialize` macrostep span starts late
+
+Span start times come from the telemetry event's own `monotonic_time`, so
+for an `event`-triggered macrostep the span's wall time matches the
+`statifier.duration` measurement almost exactly. The `:initialize`
+macrostep is the one documented exception: statifier emits its `:start`
+from the session's `init/1` and its `:stop` from the following
+`handle_continue`, so the span opens after some of the work it covers has
+already happened. The span is correspondingly shorter than
+`statifier.duration` reports - materially so, not by a rounding margin.
+
+This skew is accepted rather than corrected: the alternative is
+back-calculating the start from `end_time - duration`, which every other
+bridge in the family does for *every* span and which is strictly less
+accurate for the other triggers. Read `statifier.duration`, not the span's
+wall time, when you want the macrostep's real cost.
+
 ## License
 
 MIT - see [LICENSE](LICENSE).
