@@ -44,4 +44,18 @@ defmodule OpentelemetryStatifier.SpanCapture do
   """
   @spec attributes(term()) :: map()
   def attributes(attrs), do: :otel_attributes.map(attrs)
+
+  @doc """
+  Converts a captured span's `otel_events:t()` field into the plain list
+  of `event(...)` records it holds.
+  """
+  @spec events(term()) :: [term()]
+  def events(events), do: :otel_events.list(events)
+
+  @doc """
+  Converts a captured span's `otel_links:t()` field into the plain list
+  of `link(...)` records it holds.
+  """
+  @spec links(term()) :: [term()]
+  def links(links), do: :otel_links.list(links)
 end

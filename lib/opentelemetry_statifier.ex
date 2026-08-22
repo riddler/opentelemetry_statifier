@@ -16,27 +16,37 @@ defmodule OpentelemetryStatifier do
   (`deps/telemetry/src/telemetry.erl:109-116`). `teardown/0` detaches all of
   them.
 
-  Today the handler turns one event pair into spans: a macrostep `:start`
-  opens a root span named `statifier.macrostep`, and the `:stop` whose
-  `span_ref` matches closes it, carrying `statifier.session_id`,
-  `statifier.trigger`, `statifier.outcome`, the macrostep's counters, and
-  its resulting `statifier.configuration` as attributes
-  (`OpentelemetryStatifier.Handler`, `OpentelemetryStatifier.SpanTable`).
-  Span start times come from each event's own `monotonic_time`, so a
-  macrostep span's wall time tracks the `statifier.duration` measurement
-  closely - with one documented exception. Statifier emits the
-  `:initialize` macrostep's `:start` from the session's `init/1` and its
-  `:stop` from the following `handle_continue`, so that span opens after
-  some of the work it covers, and reads materially shorter than
-  `statifier.duration` reports. The skew is accepted rather than corrected;
-  see the README and `docs/adr/0003-handler-attach-and-span-table-mechanism.md`.
+  A macrostep `:start` opens a root span named `statifier.macrostep`, and
+  the `:stop` whose `span_ref` matches closes it, carrying
+  `statifier.session_id`, `statifier.trigger`, `statifier.outcome`, the
+  macrostep's counters, and its resulting `statifier.configuration` as
+  attributes (`OpentelemetryStatifier.Handler`,
+  `OpentelemetryStatifier.SpanTable`). Span start times come from each
+  event's own `monotonic_time`, so a macrostep span's wall time tracks the
+  `statifier.duration` measurement closely - with one documented
+  exception. Statifier emits the `:initialize` macrostep's `:start` from
+  the session's `init/1` and its `:stop` from the following
+  `handle_continue`, so that span opens after some of the work it covers,
+  and reads materially shorter than `statifier.duration` reports. The skew
+  is accepted rather than corrected; see the README and
+  `docs/adr/0003-handler-attach-and-span-table-mechanism.md`.
 
-  The other 25 events reach the handler and are silently ignored for now -
-  the effect and trace events, span links, and the datamodel-values opt-in
-  are later slices' work (see `docs/adr/0003-handler-attach-and-span-table-mechanism.md`).
-  The design this package implements lives in statifier-ex:
-  `docs/opentelemetry.md` (span topology, context propagation, cardinality)
-  and st-ADR-0062 (packaging and scope).
+  Everything that fires between a `:start` and its `:stop` - the eleven
+  `[:statifier, :session, :effect, _]` events, the nine
+  `[:statifier, :session, :trace, _]` events, `:interpret`, `:unroutable`,
+  and `:halt` - lands as a span event on the session's open macrostep
+  span, attributes mapped uniformly by `OpentelemetryStatifier.Attributes`
+  (locations flattened to `statifier.source.line`/`.column`, the raw
+  effect struct never serialized, datamodel values excluded unless
+  `setup/1` received `record_datamodel_values: true`). Each macrostep span
+  is the root of its own trace, stitched to its neighbors with span
+  links: one to the same session's previous macrostep span, and - on a
+  child session's `:initialize` macrostep - one to the invoking parent's
+  macrostep span, resolved from the `:init` event's `invoked_by`.
+  `:terminate` is ignored today; sweeping crashed sessions' rows is
+  ots-lt6's slice. The design this package implements lives in
+  statifier-ex: `docs/opentelemetry.md` (span topology, context
+  propagation, cardinality) and st-ADR-0062 (packaging and scope).
   """
 
   alias OpentelemetryStatifier.{Config, Handler}
