@@ -23,8 +23,9 @@ recorded in statifier-ex:
   span topology, context propagation, attribute mapping, cardinality
   policy, and trace-off degradation.
 - [st-ADR-0062](https://github.com/riddler/statifier-ex/blob/main/docs/adr/0062-opentelemetry-bridge-is-a-separate-package.md) -
-  packaging and scope: family-scoped, public-events-only, and unpublished
-  until statifier itself is on Hex.
+  packaging and scope: family-scoped and public-events-only. (Its
+  unpublished-until-statifier-ships clause is resolved: statifier 2.0.0 is
+  on Hex, st-ADR-0066, and so is this package.)
 
 The short version of the design: a statechart macrostep is a span; effect
 and trace telemetry events are span events on it; there is no
@@ -34,19 +35,16 @@ unbounded is exported as an attribute by default.
 
 ## Installation
 
-Not published to Hex - statifier itself is unpublished, and a Hex package
-cannot carry a git dependency, so this package pins statifier `main` SHAs
-under [st-ADR-0061's contract](https://github.com/riddler/statifier-ex/blob/main/docs/adr/0061-sha-pinning-contract-until-2-0-0.md)
-and asks the same of its consumers:
-
 ```elixir
 def deps do
   [
-    {:opentelemetry_statifier,
-     github: "riddler/opentelemetry_statifier", ref: "<pinned sha>"}
+    {:opentelemetry_statifier, "~> 0.1"}
   ]
 end
 ```
+
+The library depends only on `opentelemetry_api`; your host brings the
+`opentelemetry` SDK and exporter it actually ships.
 
 ## Usage
 
