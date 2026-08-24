@@ -1,5 +1,11 @@
 # OpentelemetryStatifier
 
+[![CI](https://github.com/riddler/opentelemetry_statifier/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/riddler/opentelemetry_statifier/actions/workflows/ci.yml)
+[![Hex.pm Version](https://img.shields.io/hexpm/v/opentelemetry_statifier.svg)](https://hex.pm/packages/opentelemetry_statifier)
+[![Hex Downloads](https://img.shields.io/hexpm/dt/opentelemetry_statifier.svg)](https://hex.pm/packages/opentelemetry_statifier)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/opentelemetry_statifier/)
+[![License](https://img.shields.io/hexpm/l/opentelemetry_statifier.svg)](https://github.com/riddler/opentelemetry_statifier/blob/main/LICENSE)
+
 OpenTelemetry instrumentation for the
 [Statifier](https://github.com/riddler/statifier-ex) family of statechart
 packages - in the `opentelemetry_oban` / `opentelemetry_ecto` mold: the
@@ -107,4 +113,5 @@ wall time, when you want the macrostep's real cost.
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+MIT - see
+[LICENSE](https://github.com/riddler/opentelemetry_statifier/blob/main/LICENSE).
