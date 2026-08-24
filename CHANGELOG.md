@@ -10,6 +10,20 @@ fragment in [`changelog.d/`](changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.1.1] 2026-08-24
+
+Patch release: brings the published documentation to the shared statifier
+docs standard. No code changes.
+
+### Changed
+
+- The hexdocs no longer publish the repo's ADRs, and `mix docs` completes
+  with zero warnings (CHANGELOG.md is on the undefined-reference skip list
+  for its changelog.d link).
+- README gains the standard badge row (CI, hex.pm version and downloads,
+  hex docs, license), and the License section links to the LICENSE file by
+  absolute GitHub URL so the link also works on hexdocs.
+
 ## [0.1.0] 2026-08-22
 
 First release: the OpenTelemetry bridge for the
