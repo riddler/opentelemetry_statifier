@@ -10,6 +10,18 @@ fragment in [`changelog.d/`](changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.1.2] 2026-08-27
+
+Patch release: refreshes the published documentation with worked examples.
+No code changes.
+
+### Changed
+
+- README gains a worked card-authorization example - chart, setup, the four
+  macrostep spans it exports, and an invoke handler for `myapp:authorize` -
+  plus a signup-wizard A/B example showing why chart vocabulary lands in
+  attributes rather than span names. Every snippet is executed by the suite.
+
 ## [0.1.1] 2026-08-24
 
 Patch release: brings the published documentation to the shared statifier
