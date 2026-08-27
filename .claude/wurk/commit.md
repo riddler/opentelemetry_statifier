@@ -46,15 +46,18 @@ this project's convention (CLAUDE.md: sabotage every new test that asserts
 `changelog.mode` is `fragments` with `dir: changelog.d`. The needs/no-entry
 test is written down in `changelog.d/README.md` - one file per bead, named
 `changelog.d/<bead-id>.md`, standard Keep a Changelog headings, entries only
-for changes visible to someone calling the public API. While the package is
-pre-first-release, most scaffold and tooling work needs no fragment, and that
-is the expected outcome, not a step you skipped.
+for changes visible to someone calling the public API. Scaffold, agent
+tooling, and docs work needs no fragment - `changelog.d/README.md` names those
+categories explicitly - and that is the expected outcome, not a step you
+skipped.
 
 ## Version bump: never
 
-`mix.exs` holds `0.1.0` until a release bead says otherwise, and the
+`mix.exs` holds whatever version the last release bead set - `0.1.2` as of
+2026-08-27, with `0.1.0`, `0.1.1`, and `0.1.2` all published to Hex. The
 authority table marks releases and version bumps as never an agent's. Never
-edit the version field as part of an ordinary commit.
+edit the version field as part of an ordinary commit, and do not treat the
+number quoted here as the thing to keep current: read `mix.exs`.
 
 ## Gate thresholds are the operator's call
 
@@ -65,12 +68,26 @@ reason to move it. Report the finding and stop. `.quality.exs` records why
 this gate is deliberately smaller than statifier-ex's; a change that moves a
 value without moving its reason is incomplete regardless of who asked.
 
-## Gate attestation: `mix gate.verify`, provided by the statifier dep
+## Gate attestation: `mix quality.verify`, provided by ex_quality
 
-The manifest wires `gate.attest` to `mix gate.verify` (bead `ots-4l6`,
-adopted under the family ruling in st-hcgl: use the dep-provided task, no
-local copy). The task ships in the pinned statifier dep; this repo carries
-no copy of it and adds no gate stage. An unattended (`/wurk:commit --auto`)
-run advances only on `attested: true` - a run that reports `attested: false`
-was narrowed (profile, scope, or a skipped stage) and is refused as before.
-Never fake an attestation; re-run the bare command instead.
+The manifest wires `gate.attest` to `mix quality.verify`. The task ships in
+`ex_quality` (`~> 0.14`, dev-only, locked at `0.14.0`), so this repo carries
+no local copy of it, on purpose, per the family ruling in st-hcgl. It adds no
+gate stage and modifies nothing in `.quality.exs`; it runs the gate with a
+machine-readable report and attests only a full run (status ok, scope all, no
+profile, no run-narrowing skip). An unattended (`/wurk:commit --auto`) run
+advances only on `attested: true` - a run that reports `attested: false` was
+narrowed and is refused. Never fake an attestation; re-run the bare command
+instead.
+
+The earlier wiring named `mix gate.verify` (bead `ots-4l6`), described here as
+shipping with the `statifier` dep. It does not. The task exists in
+statifier-ex's git tree (`lib/mix/tasks/gate.verify.ex`), but that repo's
+package `files:` list is `lib/statifier lib/statifier.ex mix.exs README.md
+LICENSE CHANGELOG.md`, which excludes `lib/mix/tasks` entirely - so the task
+cannot arrive through the Hex package. It presumably resolved while the dep
+was a git pin under st-ADR-0061 and broke silently when the dep moved to
+`{:statifier, "~> 2.0"}`. `gate.attest` therefore reported `attested: false`
+on every run, including fully green ones, which blocked every unattended agent
+commit in this repo (`ots-1fv`). Re-pointing it at the published `ex_quality`
+task needs no dependency change.
