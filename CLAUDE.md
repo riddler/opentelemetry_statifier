@@ -100,8 +100,15 @@ Also avoid `bd edit`, which opens `$EDITOR` and blocks. Use
 packages, in the `opentelemetry_oban` / `opentelemetry_ecto` mold - the
 library emits `:telemetry`, this package turns it into OTel.
 
-**Nothing is implemented yet.** The repository holds the scaffold only, so
-almost every convention below is inherited rather than demonstrated.
+**The bridge is implemented and published.** `lib/` holds the handler, the
+span table, the attribute mapping, and the config; `setup/1` attaches to every
+event `Statifier.Session.Telemetry.events/0` names, and the package is
+published on Hex (`0.1.0`, `0.1.1`, and `0.1.2` as of 2026-08-27 - read
+`mix.exs` for the current version, never this line). The surface is small and
+still pre-1.0. Conventions below
+that this repo has had no occasion to exercise are inherited from statifier-ex
+rather than demonstrated here; read `README.md` for what the bridge actually
+does today.
 
 Always refer to state machines as **state charts**, as statifier-ex does.
 
@@ -115,15 +122,20 @@ repo's ADRs adopt it rather than restating it:
   trace per macrostep, stitched with links), context propagation and its
   session-process caveat, attribute mapping, cardinality policy, failure
   tolerance, and trace-off degradation.
-- st-ADR-0062 - packaging and scope: this package is
-  family-scoped, consumes only public telemetry events, git-pins statifier
-  `main` SHAs under st-ADR-0061, and stays unpublished until
-  statifier itself is on Hex.
+- st-ADR-0062 - packaging and scope: this package is family-scoped and
+  consumes only public telemetry events. Its two dependency clauses are
+  resolved and no longer describe this repo: the git pin to statifier `main`
+  SHAs under st-ADR-0061, and staying unpublished until statifier itself is
+  on Hex. Statifier 2.x is on Hex (st-ADR-0061's trigger fired; st-ADR-0066
+  is the re-decision), `mix.exs` depends on `{:statifier, "~> 2.0"}`, and
+  this package publishes. The family-scope and public-events-only clauses
+  still bind.
 - st-ADR-0040 (plus `Statifier.Session.Telemetry`'s moduledoc,
   the single authoritative event table) - the 27-event contract this
   bridge consumes.
 - `docs/adr/` here - ADR-0001 records the ADR practice; ADR-0002 records
-  this repo's adoption of the constraints above as binding.
+  this repo's adoption of the constraints above as binding; ADR-0003
+  records the handler-attach and span-table mechanism.
 
 Two rules that do not wait to be looked up:
 
@@ -148,7 +160,10 @@ check mode (`format: [check: true]` in `.quality.exs`): the gate reports
 drift but rewrites nothing, so run `mix format` yourself before committing.
 
 Set `STATIFIER_PATH` to a local statifier-ex checkout when co-developing a
-change that spans both repos; otherwise the git pin in `mix.lock` governs.
+change that spans both repos; otherwise the published dependency governs
+(`{:statifier, "~> 2.0"}` in `mix.exs`, resolved in `mix.lock`). The override
+is an env var rather than a `mix.exs` edit so it never lands in a commit by
+accident.
 
 <!-- usage-rules-start -->
 ## ExQuality (`mix quality`)
