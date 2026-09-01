@@ -26,7 +26,8 @@ defmodule OpentelemetryStatifier.SpanCapture do
   @doc """
   Points the globally configured `:otel_simple_processor` exporter at the
   calling test process for the duration of the current test, and tears
-  down anything the test attached to `OpentelemetryStatifier` on exit.
+  down anything the test attached to `OpentelemetryStatifier` or to
+  either sibling setup on exit.
 
   Call from a test's `setup` block. Tests remain `async: false`: both the
   `:telemetry` handler registry and this exporter are process-global.
@@ -34,7 +35,13 @@ defmodule OpentelemetryStatifier.SpanCapture do
   @spec start(ExUnit.Callbacks.context()) :: :ok
   def start(_context) do
     :ok = :otel_simple_processor.set_exporter(:otel_exporter_pid, self())
-    ExUnit.Callbacks.on_exit(fn -> OpentelemetryStatifier.teardown() end)
+
+    ExUnit.Callbacks.on_exit(fn ->
+      OpentelemetryStatifier.teardown()
+      OpentelemetryStatifier.Persistence.teardown()
+      OpentelemetryStatifier.Oban.teardown()
+    end)
+
     :ok
   end
 

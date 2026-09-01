@@ -54,6 +54,15 @@ defmodule OpentelemetryStatifier do
   implements lives in statifier-ex: `docs/opentelemetry.md` (span
   topology, context propagation, cardinality, failure tolerance) and
   st-ADR-0062 (packaging and scope).
+
+  The family's sibling packages are bridged by their own setup calls -
+  `OpentelemetryStatifier.Persistence.setup/1` and
+  `OpentelemetryStatifier.Oban.setup/1`, each attaching only its own
+  family - the shape `opentelemetry_ecto` and `opentelemetry_oban`
+  compose in a host. With `Persistence` attached, a durable macrostep
+  span nests inside the `statifier_persistence.run.step` span around it
+  rather than rooting its own trace; with neither attached, nothing here
+  behaves differently (ADR-0004).
   """
 
   alias OpentelemetryStatifier.{Config, Handler}
