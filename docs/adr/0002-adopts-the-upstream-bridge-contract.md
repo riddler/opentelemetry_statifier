@@ -61,3 +61,20 @@ This package adopts the upstream records as binding, by reference:
 - What would reopen this record: st-ADR-0062 being amended (packaging or
   scope), or the design note moving in a way that contradicts an ADR
   already accepted here.
+
+## Notes
+
+**2026-09-01: decision 4 is resolved.** Statifier 2.x is on Hex, so
+st-ADR-0061 decision 5's trigger has fired upstream and st-ADR-0066 is
+the re-decision that replaced the git-pin contract. This package now
+takes statifier as an ordinary Hex requirement - `mix.exs` states the
+requirement and `mix.lock` resolves it to a version and a checksum,
+rather than to a `main` SHA - and it publishes: 0.1.0, 0.1.1, and 0.1.2
+are on Hex.
+
+Decision 4 is left as written rather than rewritten. It records what was
+decided on 2026-08-20 under the contract in force then, and the
+condition it named is exactly the one that fired; rewriting it would
+erase the trigger along with the wait. Decisions 1, 2, 3, and 5 are
+untouched by this and still bind, so the record stays accepted rather
+than superseded.
