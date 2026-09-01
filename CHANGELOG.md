@@ -10,6 +10,17 @@ fragment in [`changelog.d/`](changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.2.0] 2026-09-01
+
+Minor release: the bridge tracks the statifier 2.4 line.
+
+### Changed
+
+- The `statifier` requirement moves from `~> 2.0` to `~> 2.4`, the release
+  whose published guides carry the design this bridge implements. Anyone
+  reading the engine's `docs/opentelemetry.md` alongside the bridge now
+  reads the version the bridge is built and tested against.
+
 ## [0.1.2] 2026-08-27
 
 Patch release: refreshes the published documentation with worked examples.
