@@ -90,7 +90,7 @@ defmodule OpentelemetryStatifier.MixProject do
   # so the override never lands in a commit by accident.
   defp statifier_dep do
     case System.get_env("STATIFIER_PATH") do
-      nil -> {:statifier, "~> 2.0"}
+      nil -> {:statifier, "~> 2.4"}
       path -> {:statifier, path: path, override: true}
     end
   end
