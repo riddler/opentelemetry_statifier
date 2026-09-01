@@ -127,7 +127,7 @@ repo's ADRs adopt it rather than restating it:
   resolved and no longer describe this repo: the git pin to statifier `main`
   SHAs under st-ADR-0061, and staying unpublished until statifier itself is
   on Hex. Statifier 2.x is on Hex (st-ADR-0061's trigger fired; st-ADR-0066
-  is the re-decision), `mix.exs` depends on `{:statifier, "~> 2.0"}`, and
+  is the re-decision), `mix.exs` depends on `{:statifier, "~> 2.4"}`, and
   this package publishes. The family-scope and public-events-only clauses
   still bind.
 - st-ADR-0040 (plus `Statifier.Session.Telemetry`'s moduledoc,
@@ -161,7 +161,7 @@ drift but rewrites nothing, so run `mix format` yourself before committing.
 
 Set `STATIFIER_PATH` to a local statifier-ex checkout when co-developing a
 change that spans both repos; otherwise the published dependency governs
-(`{:statifier, "~> 2.0"}` in `mix.exs`, resolved in `mix.lock`). The override
+(`{:statifier, "~> 2.4"}` in `mix.exs`, resolved in `mix.lock`). The override
 is an env var rather than a `mix.exs` edit so it never lands in a commit by
 accident.
 
