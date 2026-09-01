@@ -23,18 +23,22 @@ defmodule OpentelemetryStatifier.Handler do
 
   require OpenTelemetry.Tracer
 
-  alias OpentelemetryStatifier.{Attributes, Config, SpanEntry, SpanTable}
+  alias OpentelemetryStatifier.{Attributes, Config, Sibling, SpanEntry, SpanTable}
 
   @spec handle_event(:telemetry.event_name(), map(), map(), Config.t()) :: :ok
 
-  # Opens a root span for a macrostep. `OpenTelemetry.Ctx.new/0` is an empty
-  # context, never the process's ambient one - that is what makes each
-  # macrostep the root of its own trace (the design note's "one trace per
-  # macrostep"), and the span is deliberately never attached to the process
-  # context, so the bridge cannot clobber a host's context inside the
-  # session process. `span_ref` and `monotonic_time` are bound and guarded
-  # in the head: a start missing either falls straight through to the
-  # catch-all and is dropped rather than raising.
+  # Opens the macrostep span. Its context is never the process's ambient
+  # one - the span is not attached to the process context either, so the
+  # bridge cannot clobber a host's context inside the session process. It
+  # is a *root* span (the design note's "one trace per macrostep") in the
+  # ordinary case, and a child of this bridge's own open sibling span when
+  # there is one: a durable macrostep stepped inside a
+  # `statifier_persistence.run.step` span nests inside it, which is the
+  # topology the design note and sp's `docs/telemetry.md` both describe
+  # (ADR-0004 amends ADR-0003 decision 8 to exactly this extent).
+  # `span_ref` and `monotonic_time` are bound and guarded in the head: a
+  # start missing either falls straight through to the catch-all and is
+  # dropped rather than raising.
   def handle_event(
         [:statifier, :session, :macrostep, :start],
         %{monotonic_time: monotonic_time},
@@ -44,7 +48,7 @@ defmodule OpentelemetryStatifier.Handler do
       when is_reference(span_ref) and is_integer(monotonic_time) do
     span_ctx =
       OpenTelemetry.Tracer.start_span(
-        OpenTelemetry.Ctx.new(),
+        Sibling.parent_ctx(table, self()),
         "statifier.macrostep",
         %{
           start_time: monotonic_time,

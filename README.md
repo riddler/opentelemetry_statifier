@@ -96,6 +96,53 @@ Call `teardown/0` to detach everything, for example between test cases:
 With no SDK started, the bridge is a cheap no-op: spans go through a
 no-op tracer and nothing is exported.
 
+### The sibling packages: `statifier_persistence` and `statifier_oban`
+
+The family's other telemetry surfaces are bridged here too, as **separate
+setup calls** - the shape `opentelemetry_ecto` and `opentelemetry_oban`
+compose in a host. Attach the ones you run:
+
+```elixir
+:ok = OpentelemetryStatifier.setup()
+:ok = OpentelemetryStatifier.Persistence.setup()
+:ok = OpentelemetryStatifier.Oban.setup()
+```
+
+`OpentelemetryStatifier.Persistence` bridges the durable stepper's
+fourteen `[:statifier_persistence, ...]` events. One serialized drive -
+lock, load, decode, identity-check, advance, execute effects, persist -
+becomes a `statifier_persistence.run.step` span, and **the macrostep span
+for that step nests inside it**, as do the
+`statifier_persistence.adapter.call` and `statifier_persistence.run.lock`
+spans. So a durable run reads as one tree: which storage call was slow,
+how long the run waited for its own lock, and what the chart did, in one
+place. The lifecycle events - a run created, terminated, discarded, an
+identity refusal, a failed effect, the child-run seam - land as span
+events on the step span.
+
+`OpentelemetryStatifier.Oban` bridges the durable-timer seam's eleven
+`[:statifier_oban, ...]` events. Scheduling events fire on the process
+that drove the macrostep, so they land as span events on that macrostep
+span: the chart's decision and its durable consequence in one span,
+`conflict?` included, which is what says whether a replayed drive
+actually wrote anything. Delivery events fire inside an Oban job, days
+later and usually on another node, so each becomes its own span - linked
+to the trace that armed the timer when your host stamped a W3C
+`traceparent` into `caller_context`, and simply unlinked when it did not.
+A link and never a parent: parenting a fire to the request that armed it
+would hold that trace open for the length of the delay. Oban's own job
+spans stay `opentelemetry_oban`'s to produce; attach both.
+
+Each family's attributes live in its own namespace
+(`statifier_persistence.`, `statifier_oban.`), with the correlation key -
+`session_id` there, `scope` here - mapped onto the shared
+`statifier.session_id` so one attribute joins a step, a timer and a
+macrostep. Each setup has its own `teardown/0` and is independent of the
+others. The mechanism is recorded in
+[ADR-0004](docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md);
+the event contracts themselves are frozen upstream, in
+`statifier_persistence`'s ADR-0009 and `statifier_oban`'s ADR-0006.
+
 ### The `:initialize` macrostep span starts late
 
 Span start times come from the telemetry event's own `monotonic_time`, so

@@ -20,6 +20,17 @@ defmodule OpentelemetryStatifier.SpanTable do
       {{:last_span_ctx, session_id},  session_id, span_ctx}
       {{:invoke_parent, session_id},  session_id, span_ctx}
       {{:session_pid, session_id},    session_id, pid}
+      {{:sibling_span, span_ref},     pid,        %SiblingEntry{}}
+
+  The `:sibling_span` row is the sibling families' half (ADR-0004): a
+  `[:statifier_persistence, :run, :step, :start]` opens one keyed on the
+  same `span_ref` convention, and it carries a **pid** in element 2 where
+  the macrostep rows carry a `session_id`, because a step span is scoped
+  to the process that drove it rather than to a logical session. That is
+  what makes `fetch_innermost_sibling_span/2` a one-`match_object`
+  lookup for "is one of this bridge's own spans open around me, in this
+  process" - the question every nested sibling span and every durable
+  macrostep span asks.
 
   The `:invoke_parent` row is written when a child session's `:init` event
   names an `invoked_by` parent whose macrostep span is open at that
@@ -44,7 +55,7 @@ defmodule OpentelemetryStatifier.SpanTable do
 
   use GenServer
 
-  alias OpentelemetryStatifier.SpanEntry
+  alias OpentelemetryStatifier.{SiblingEntry, SpanEntry}
 
   # One minute balances leak lifetime against wakeup cost: an orphaned row
   # is three tuples, so a longer leak costs almost nothing, and a sweep of
@@ -141,6 +152,72 @@ defmodule OpentelemetryStatifier.SpanTable do
   end
 
   @doc """
+  Stores an open sibling span's `%SiblingEntry{}` under its `span_ref`,
+  keyed for lookup by the process that opened it.
+  """
+  @spec put_sibling_span(atom(), reference(), pid(), SiblingEntry.t()) :: :ok
+  def put_sibling_span(table, span_ref, pid, %SiblingEntry{} = entry) do
+    :ets.insert(table, {{:sibling_span, span_ref}, pid, entry})
+    :ok
+  end
+
+  @doc """
+  Looks up and removes the open sibling span under `span_ref`. Returns
+  `:error` on a miss, which - as for `take_open_span/2` - is a
+  contract-legal shape rather than a bug.
+  """
+  @spec take_sibling_span(atom(), reference()) :: {:ok, SiblingEntry.t()} | :error
+  def take_sibling_span(table, span_ref) do
+    case :ets.lookup(table, {:sibling_span, span_ref}) do
+      [{{:sibling_span, ^span_ref}, _pid, entry}] ->
+        :ets.delete(table, {:sibling_span, span_ref})
+        {:ok, entry}
+
+      [] ->
+        :error
+    end
+  end
+
+  @doc """
+  Fetches the innermost sibling span open in `pid` - the entry with the
+  greatest `started_at`, since a parent run creating a durable child
+  inside its own step holds two step spans open on one process. Returns
+  `:error` when the process has none, which is the ordinary case for a
+  host that attached only the sibling setups it uses.
+  """
+  @spec fetch_innermost_sibling_span(atom(), pid()) :: {:ok, SiblingEntry.t()} | :error
+  def fetch_innermost_sibling_span(table, pid) do
+    case :ets.match_object(table, {{:sibling_span, :_}, pid, :_}) do
+      [] ->
+        :error
+
+      rows ->
+        {_key, _pid, entry} =
+          Enum.max_by(rows, fn {_key, _pid, %SiblingEntry{started_at: started_at}} ->
+            started_at
+          end)
+
+        {:ok, entry}
+    end
+  end
+
+  @doc """
+  Fetches the process recorded for `session_id` by `put_session_pid/3`,
+  or `:error` for a session the bridge has not seen. The sibling
+  handlers use it to check that a session's open macrostep span belongs
+  to *this* process before landing a span event on it - a delivery-seam
+  event on an Oban worker must never write onto a span another process
+  has open for the same scope.
+  """
+  @spec fetch_session_pid(atom(), String.t()) :: {:ok, pid()} | :error
+  def fetch_session_pid(table, session_id) do
+    case :ets.lookup(table, {:session_pid, session_id}) do
+      [{{:session_pid, ^session_id}, _session_id, pid}] -> {:ok, pid}
+      [] -> :error
+    end
+  end
+
+  @doc """
   Records the parent macrostep span context a child session's
   `:initialize` macrostep will link to, keyed by the child's `session_id`.
   """
@@ -222,9 +299,11 @@ defmodule OpentelemetryStatifier.SpanTable do
 
   @doc """
   Ends the orphans a brutal kill leaves behind: for every `:session_pid`
-  row whose process is no longer alive, delegates to `delete_session/3`.
-  A live session's rows are never touched - an open span on a live
-  session is just a macrostep in flight, whatever its age.
+  row whose process is no longer alive, delegates to `delete_session/3`,
+  and for every `:sibling_span` row whose process is no longer alive,
+  ends that span with an error status and deletes the row. A live
+  process's rows are never touched - an open span on a live process is
+  just a step or a macrostep in flight, whatever its age.
   """
   @spec sweep(atom()) :: :ok
   def sweep(table) do
@@ -237,6 +316,30 @@ defmodule OpentelemetryStatifier.SpanTable do
           session_id,
           "statifier session process died with the macrostep span still open"
         )
+      end
+    end)
+
+    sweep_sibling_spans(table)
+  end
+
+  # A sibling step span's two halves are emitted inside one synchronous
+  # call, so the only way to orphan one is for that call's process to die
+  # mid-step. There is no `:terminate`-shaped hook on that path - the
+  # sibling contracts have none - so the liveness sweep is the whole
+  # cleanup story for these rows.
+  @spec sweep_sibling_spans(atom()) :: :ok
+  defp sweep_sibling_spans(table) do
+    table
+    |> :ets.match_object({{:sibling_span, :_}, :_, :_})
+    |> Enum.each(fn {key, pid, %SiblingEntry{span_ctx: span_ctx}} ->
+      if not Process.alive?(pid) do
+        OpenTelemetry.Span.set_status(
+          span_ctx,
+          OpenTelemetry.status(:error, "the process driving this step died with the span open")
+        )
+
+        OpenTelemetry.Span.end_span(span_ctx)
+        :ets.delete(table, key)
       end
     end)
 

@@ -149,7 +149,14 @@ repo's ADRs adopt it rather than restating it:
   bridge consumes.
 - `docs/adr/` here - ADR-0001 records the ADR practice; ADR-0002 records
   this repo's adoption of the constraints above as binding; ADR-0003
-  records the handler-attach and span-table mechanism.
+  records the handler-attach and span-table mechanism; ADR-0004 records
+  the sibling setup calls (`OpentelemetryStatifier.Persistence`,
+  `OpentelemetryStatifier.Oban`) and the bridge-owned nesting that
+  amends ADR-0003 decision 8.
+- The sibling event contracts, frozen in their own repos and never
+  restated here: `statifier_persistence`'s ADR-0009 and `docs/telemetry.md`
+  (14 events), `statifier_oban`'s ADR-0006 and `docs/telemetry.md`
+  (11 events).
 
 Two rules that do not wait to be looked up:
 
