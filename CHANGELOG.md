@@ -10,6 +10,26 @@ fragment in [`changelog.d/`](changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.3.0] 2026-09-01
+
+Minor release: the bridge now covers the family sibling packages.
+
+### Added
+
+- Adds `OpentelemetryStatifier.Persistence.setup/0,1`, bridging the fourteen
+  `[:statifier_persistence, ...]` events into a `statifier_persistence.run.step`
+  span with the storage, lock and lifecycle detail inside it.
+- Adds `OpentelemetryStatifier.Oban.setup/0,1`, bridging the eleven
+  `[:statifier_oban, ...]` events: scheduling events onto the macrostep span
+  that armed them, and each delivery event as its own span linked to the
+  arming trace through `caller_context`.
+
+### Changed
+
+- A macrostep span now nests inside the `statifier_persistence.run.step` span
+  around it, instead of always rooting its own trace. With no sibling setup
+  attached, nothing changes.
+
 ## [0.2.0] 2026-09-01
 
 Minor release: the bridge tracks the statifier 2.4 line.
