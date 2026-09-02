@@ -51,13 +51,20 @@ tooling, and docs work needs no fragment - `changelog.d/README.md` names those
 categories explicitly - and that is the expected outcome, not a step you
 skipped.
 
-## Version bump: never
+## Version bump: only on a release bead
 
-`mix.exs` holds whatever version the last release bead set - `0.1.2` as of
-2026-08-27, with `0.1.0`, `0.1.1`, and `0.1.2` all published to Hex. The
-authority table marks releases and version bumps as never an agent's. Never
-edit the version field as part of an ordinary commit, and do not treat the
-number quoted here as the thing to keep current: read `mix.exs`.
+`mix.exs` holds whatever version the last release bead set. Read it; this
+file quotes no number, on purpose - a version pinned in prose here goes
+stale the release after it is written.
+
+The boundary is `CLAUDE.md`'s authority table, which this file points at and
+does not restate. Its *version bump on a release bead's branch* row allows
+the bump only on an operator-authorized release bead inside a campaign
+carrying the operator's explicit consent, and its *release (tag,
+`mix hex.publish`, GitHub release)* row allows those never. So at ordinary
+commit time the answer is unchanged: never edit the version field as part of
+a commit that is not a release prep. `.claude/wurk/release.md` is the recipe
+for the one case where it moves.
 
 ## Gate thresholds are the operator's call
 
