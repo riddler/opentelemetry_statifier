@@ -10,6 +10,27 @@ fragment in [`changelog.d/`](changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.4.0] 2026-09-02
+
+Minor release: a host with its own durable stepper can now declare the
+parent span, and a subscriber can resolve an open macrostep span by key.
+
+### Added
+
+- `OpentelemetryStatifier.Parent.register/2`, `unregister/1` and `within/3`
+  let a host with its own durable stepper declare the span its macrostep
+  spans nest inside, the way `statifier_persistence`'s step span already
+  does.
+- `OpentelemetryStatifier.SpanContext.lookup/2` resolves the open macrostep
+  span for a `(session_id, macrostep)` pair to its W3C trace and span ids, so
+  a `statifier_ui` subscriber can be wired to it as an `:otel_context`
+  producer directly.
+
+### Fixed
+
+- The macrostep span now carries `statifier.driver`, so a backend can tell a
+  durable macrostep from a session-hosted one.
+
 ## [0.3.0] 2026-09-01
 
 Minor release: the bridge now covers the family sibling packages.
