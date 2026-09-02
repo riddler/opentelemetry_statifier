@@ -21,6 +21,7 @@ defmodule OpentelemetryStatifier.SpanTable do
       {{:invoke_parent, session_id},  session_id, span_ctx}
       {{:session_pid, session_id},    session_id, pid}
       {{:sibling_span, span_ref},     pid,        %SiblingEntry{}}
+      {{:parent_span, ref},           pid,        %ParentEntry{}}
 
   The `:sibling_span` row is the sibling families' half (ADR-0004): a
   `[:statifier_persistence, :run, :step, :start]` opens one keyed on the
@@ -31,6 +32,17 @@ defmodule OpentelemetryStatifier.SpanTable do
   lookup for "is one of this bridge's own spans open around me, in this
   process" - the question every nested sibling span and every durable
   macrostep span asks.
+
+  The `:parent_span` row is the foreign-driver half of the same
+  mechanism (ADR-0004 decision 4, and its 2026-09-02 Notes): a host that
+  runs a durable stepper this package knows nothing about declares its
+  own enclosing span through `OpentelemetryStatifier.Parent.register/2`,
+  and the row it writes is read by exactly the same "is something of
+  mine open around me, in this process" lookup. It carries a **pid** in
+  element 2 for that reason. The one thing it is not is a span this
+  bridge owns: `sweep/1` deletes an abandoned `:parent_span` row without
+  ending its span, where a `:sibling_span` row's span is ended with an
+  error status.
 
   The `:invoke_parent` row is written when a child session's `:init` event
   names an `invoked_by` parent whose macrostep span is open at that
@@ -61,7 +73,7 @@ defmodule OpentelemetryStatifier.SpanTable do
 
   use GenServer
 
-  alias OpentelemetryStatifier.{SiblingEntry, SpanEntry}
+  alias OpentelemetryStatifier.{ParentEntry, SiblingEntry, SpanEntry}
 
   # One minute balances leak lifetime against wakeup cost: an orphaned row
   # is three tuples, so a longer leak costs almost nothing, and a sweep of
@@ -263,6 +275,70 @@ defmodule OpentelemetryStatifier.SpanTable do
   end
 
   @doc """
+  Stores a host-declared enclosing span's `%ParentEntry{}` under `ref`,
+  keyed for lookup by the process whose spans nest under it.
+  """
+  @spec put_parent_span(atom(), reference(), pid(), ParentEntry.t()) :: :ok
+  def put_parent_span(table, ref, pid, %ParentEntry{} = entry) do
+    :ets.insert(table, {{:parent_span, ref}, pid, entry})
+    :ok
+  end
+
+  @doc """
+  Removes the host-declared enclosing span under `ref`. The declared span
+  is **not** ended - the host that opened it owns its lifetime. Removing
+  a `ref` that is not there is `:ok`, so `unregister/1` is idempotent and
+  safe to call from an `after` block that may run twice.
+  """
+  @spec delete_parent_span(atom(), reference()) :: :ok
+  def delete_parent_span(table, ref) do
+    :ets.delete(table, {:parent_span, ref})
+    :ok
+  end
+
+  @doc """
+  The context a span opened in `pid` right now should nest under: the
+  innermost thing this bridge has recorded as enclosing that process,
+  whichever of the two kinds it is, or `:error` when there is none.
+
+  Two row shapes answer the same question and are ordered against each
+  other on the one clock they share (`System.monotonic_time/0`): a
+  `:sibling_span` row, which is a span this bridge opened itself from a
+  sibling package's `:start` event, and a `:parent_span` row, which is a
+  span a host declared through
+  `OpentelemetryStatifier.Parent.register/2`. The most recently opened of
+  them is the innermost, so a bridge-opened step span inside a host's
+  declared span parents what follows, and so does a declaration made
+  inside a step span.
+
+  A declaration whose registrant is dead is skipped: nobody is left to
+  end that span or to withdraw the declaration, so nesting under it would
+  attach live spans to an abandoned trace. Falling back to the next
+  enclosing row - or, usually, to no parent at all - is the honest
+  answer.
+  """
+  @spec fetch_enclosing_ctx(atom(), pid()) :: {:ok, OpenTelemetry.Ctx.t()} | :error
+  def fetch_enclosing_ctx(table, pid) do
+    sibling_rows =
+      table
+      |> :ets.match_object({{:sibling_span, :_}, pid, :_})
+      |> Enum.map(fn {_key, _pid, %SiblingEntry{ctx: ctx, started_at: at}} -> {at, ctx} end)
+
+    parent_rows =
+      table
+      |> :ets.match_object({{:parent_span, :_}, pid, :_})
+      |> Enum.filter(fn {_key, _pid, %ParentEntry{registrant: registrant}} ->
+        Process.alive?(registrant)
+      end)
+      |> Enum.map(fn {_key, _pid, %ParentEntry{ctx: ctx, registered_at: at}} -> {at, ctx} end)
+
+    case sibling_rows ++ parent_rows do
+      [] -> :error
+      rows -> {:ok, rows |> Enum.max_by(fn {at, _ctx} -> at end) |> elem(1)}
+    end
+  end
+
+  @doc """
   Fetches the process recorded for `session_id` by `put_session_pid/3`,
   or `:error` for a session the bridge has not seen. The sibling
   handlers use it to check that a session's open macrostep span belongs
@@ -365,6 +441,12 @@ defmodule OpentelemetryStatifier.SpanTable do
   ends that span with an error status and deletes the row. A live
   process's rows are never touched - an open span on a live process is
   just a step or a macrostep in flight, whatever its age.
+
+  A `:parent_span` row is swept when either its registrant or the process
+  it nests spans for is gone, and its span is **never** ended: the host
+  declared a span it owns, and ending someone else's span - possibly in
+  the middle of the work it covers - would be worse than leaking a
+  three-tuple until the next sweep.
   """
   @spec sweep(atom()) :: :ok
   def sweep(table) do
@@ -381,6 +463,7 @@ defmodule OpentelemetryStatifier.SpanTable do
     end)
 
     sweep_sibling_spans(table)
+    sweep_parent_spans(table)
   end
 
   # A sibling step span's two halves are emitted inside one synchronous
@@ -400,6 +483,25 @@ defmodule OpentelemetryStatifier.SpanTable do
         )
 
         OpenTelemetry.Span.end_span(span_ctx)
+        :ets.delete(table, key)
+      end
+    end)
+
+    :ok
+  end
+
+  # A declaration is withdrawn by its registrant, so the only way to
+  # orphan one is for that process to die without reaching its
+  # `unregister/1` - a driver crashing mid-step, or a host that never
+  # withdrew at all. The row is deleted and the span is left alone: this
+  # bridge did not open it and does not know whether the work it covers
+  # has finished.
+  @spec sweep_parent_spans(atom()) :: :ok
+  defp sweep_parent_spans(table) do
+    table
+    |> :ets.match_object({{:parent_span, :_}, :_, :_})
+    |> Enum.each(fn {key, pid, %ParentEntry{registrant: registrant}} ->
+      if not (Process.alive?(pid) and Process.alive?(registrant)) do
         :ets.delete(table, key)
       end
     end)

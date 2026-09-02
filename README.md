@@ -146,6 +146,63 @@ others. The mechanism is recorded in
 the event contracts themselves are frozen upstream, in
 `statifier_persistence`'s ADR-0009 and `statifier_oban`'s ADR-0006.
 
+### Your own durable stepper: declaring the enclosing span
+
+The nesting above is not really about `statifier_persistence`. If you run
+your own durable stepper - your own storage, your own lock, your own step
+span - you can have the same tree, by **declaring** the span the
+macrosteps belong inside:
+
+```elixir
+require OpenTelemetry.Tracer
+
+OpenTelemetry.Tracer.with_span "my_app.workflow.step" do
+  OpentelemetryStatifier.Parent.within(
+    OpenTelemetry.Tracer.current_span_ctx(),
+    fn ->
+      # every statifier.macrostep span this process drives in here nests
+      # inside my_app.workflow.step
+      MyApp.DurableStepper.drive(session_id, event)
+    end
+  )
+end
+```
+
+`within/3` withdraws the declaration on the way out, raises included.
+When the enclosing span outlives one function call - a `GenServer` that
+opens its step span in one callback and closes it in another - use
+`register/2` and `unregister/1` directly.
+
+The declaration is keyed on the process whose spans nest under it, which
+defaults to `self()`; a driver that steps the session in another process
+passes `pid: session_pid`. Declarations compose with each other and with
+`statifier_persistence`'s step spans: the innermost one at the moment a
+macrostep starts is its parent.
+
+This is the sanctioned door, and it is the only one. The bridge still
+never reads the process's ambient OTel context and still attaches nothing
+to it, so an unrelated request span you happen to have open does **not**
+quietly swallow every macrostep - you hand in the span you mean, and
+nothing else parents anything. The bridge parents spans under your span
+and does no more: it never ends it, never writes an attribute on it, and
+never lands a span event on it. Its lifetime stays yours.
+
+`register/2` answers `{:error, reason}` rather than raising when it
+cannot record the declaration (`:invalid_span` for a
+`current_span_ctx/0` with nothing open, `:no_span_table` when the bridge
+was never set up, `:registrant_not_alive` for a dead `:pid`);
+`within/3` runs its block either way, because instrumentation does not
+get to decide whether your work happens. If the process that registered
+dies without withdrawing, the declaration is abandoned - macrostep spans
+go back to rooting their own traces, and the sweep drops the row without
+ending your span.
+
+Hosts that never call any of this see no change at all: with no
+declaration, every span is exactly what it was. The mechanism is
+recorded in
+[ADR-0004](docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md),
+in the 2026-09-02 note that generalizes its decision 4.
+
 ### Correlating with a `statifier_ui` trace stream
 
 `statifier_ui` renders the same runs these spans describe, and its trace

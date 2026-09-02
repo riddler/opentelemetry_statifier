@@ -33,6 +33,13 @@ defmodule OpentelemetryStatifier.Sibling do
   topology `statifier_persistence`'s `docs/telemetry.md` describes -
   adapter call inside step, durable macrostep inside step - without the
   bridge ever touching a host's context.
+
+  A span a host **declares** through
+  `OpentelemetryStatifier.Parent.register/2` parents the same way and for
+  the same reason: it was handed in explicitly rather than read off the
+  process, which is what keeps ADR-0003 decision 8 intact while letting a
+  durable driver this package has never heard of get the topology the
+  family's own stepper gets.
   """
 
   require OpenTelemetry.Tracer
@@ -226,18 +233,24 @@ defmodule OpentelemetryStatifier.Sibling do
 
   @doc """
   The context a span opened in `pid` right now should start from: the
-  innermost sibling span this bridge has open in that process, or an
-  empty context when it has none.
+  innermost span this bridge has recorded as enclosing that process, or
+  an empty context when it has none.
 
   This is the whole of ADR-0004's nesting mechanism, and it is why the
-  bridge still never reads the process's ambient OTel context: the only
-  span that can parent another here is one this bridge itself opened, in
-  this process, and recorded in its own table.
+  bridge still never reads the process's ambient OTel context. Two kinds
+  of span can parent another here, and neither is "whatever happens to be
+  ambient": one this bridge itself opened in this process from a sibling
+  package's `:start` event, and one a host **declared** through
+  `OpentelemetryStatifier.Parent.register/2`, which is the sanctioned
+  door a foreign durable driver uses to get the same topology
+  (ADR-0004 decision 4's 2026-09-02 Notes).
+  `OpentelemetryStatifier.SpanTable.fetch_enclosing_ctx/2` picks the
+  innermost of the two.
   """
   @spec parent_ctx(atom(), pid()) :: OpenTelemetry.Ctx.t()
   def parent_ctx(table, pid) do
-    case SpanTable.fetch_innermost_sibling_span(table, pid) do
-      {:ok, %SiblingEntry{ctx: ctx}} -> ctx
+    case SpanTable.fetch_enclosing_ctx(table, pid) do
+      {:ok, ctx} -> ctx
       :error -> OpenTelemetry.Ctx.new()
     end
   end

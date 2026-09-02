@@ -64,6 +64,14 @@ defmodule OpentelemetryStatifier do
   rather than rooting its own trace; with neither attached, nothing here
   behaves differently (ADR-0004).
 
+  A host running a durable stepper of its own asks for that same nesting
+  through `OpentelemetryStatifier.Parent`: `register/2` and
+  `unregister/1`, or the scoped `within/3`, declare the span a process's
+  macrostep spans belong inside. It is a declaration and never an ambient
+  read - the bridge still neither inherits nor clobbers the process's
+  OTel context - and a host that never calls it sees no change at all
+  (ADR-0004 decision 4, generalized in that record's 2026-09-02 note).
+
   `OpentelemetryStatifier.SpanContext.lookup/2` is the one read the bridge
   offers back: the open macrostep span for a `(session_id, macrostep)`
   pair, as its W3C trace and span ids. It exists so a `statifier_ui`
