@@ -242,6 +242,7 @@ defmodule OpentelemetryStatifier.Handler do
       "statifier.trigger" => Atom.to_string(trigger)
     }
     |> put_event_name(Map.get(metadata, :event_name))
+    |> put_driver(Map.get(metadata, :driver))
   end
 
   @spec stop_attributes(map(), map()) :: map()
@@ -264,6 +265,22 @@ defmodule OpentelemetryStatifier.Handler do
 
   defp put_event_name(attributes, event_name),
     do: Map.put(attributes, "statifier.event_name", event_name)
+
+  # `driver` (st-ADR-0067 decision 4: `:session` for this library's own
+  # process driver, one stable atom of its own for an external one) is what
+  # tells a backend a durable macrostep from a session-hosted one. The span
+  # events already carry it through `Attributes`'s uniform metadata mapping;
+  # the macrostep span builds its own attributes here, so the same mapping
+  # is spelled out - the record's own consequence for this package is "read
+  # `driver`, map it to `statifier.driver`". Omitted when absent, as
+  # `event_name` is: statifier 2.0.0-2.3.x emitted no `driver` key at all.
+  @spec put_driver(map(), atom() | nil) :: map()
+  defp put_driver(attributes, nil), do: attributes
+
+  defp put_driver(attributes, driver) when is_atom(driver),
+    do: Map.put(attributes, "statifier.driver", Atom.to_string(driver))
+
+  defp put_driver(attributes, _driver), do: attributes
 
   @spec put_configuration(map(), MapSet.t(String.t()) | nil) :: map()
   defp put_configuration(attributes, nil), do: attributes

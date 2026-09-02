@@ -47,10 +47,15 @@ defmodule OpentelemetryStatifier.Persistence do
   no dependency on its siblings: a bridge that made `statifier_persistence`
   (and through it Ecto, and a database driver) a dependency of every host
   that wants statechart tracing would have the dependency direction
-  exactly backwards. The contract is frozen upstream by an accepted ADR
-  and the two lists are checked against each other by hand at each
-  sibling release; `ots-41k` carries the drift test that compares them
-  automatically once `statifier_persistence` is on Hex with `events/0`.
+  exactly backwards.
+
+  The two lists are not checked by hand. `statifier_persistence` is a
+  `only: :test, runtime: false` dependency of this package, and
+  `test/opentelemetry_statifier/sibling_event_drift_test.exs` asserts this
+  list against `StatifierPersistence.Telemetry.events/0` on every gate
+  run, so a name added, removed, or renamed upstream turns this repo red
+  rather than silently going unbridged. A host pays nothing for that: an
+  `only: :test` dependency is not a published Hex requirement.
   """
 
   alias OpentelemetryStatifier.Config

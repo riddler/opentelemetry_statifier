@@ -326,6 +326,75 @@ defmodule OpentelemetryStatifier.HandlerTest do
     end
   end
 
+  describe "statifier.driver" do
+    defp emit_pair_with_driver(session_id, driver) do
+      span_ref = make_ref()
+
+      :telemetry.execute(
+        [:statifier, :session, :macrostep, :start],
+        %{system_time: System.system_time(), monotonic_time: System.monotonic_time()},
+        %{
+          session_id: session_id,
+          trigger: :event,
+          event_name: "go",
+          span_ref: span_ref,
+          driver: driver
+        }
+      )
+
+      :telemetry.execute(
+        [:statifier, :session, :macrostep, :stop],
+        %{
+          duration: 500,
+          macrostep: 1,
+          microsteps: 1,
+          rounds: 1,
+          monotonic_time: System.monotonic_time()
+        },
+        %{
+          session_id: session_id,
+          trigger: :event,
+          outcome: :quiescent,
+          event_name: "go",
+          configuration: MapSet.new(),
+          span_ref: span_ref,
+          driver: driver
+        }
+      )
+    end
+
+    # sabotage: start_attributes/3's `put_driver/2` call removed -> red
+    # (st-ADR-0067 decision 4's consequence for this package is "read
+    # `driver`, map it to `statifier.driver`", and the moduledocs promise it)
+    test "the driver metadata lands on the macrostep span for both drivers" do
+      for driver <- [:session, :persistence] do
+        emit_pair_with_driver("session-driver-#{driver}", driver)
+
+        assert_receive {:span, captured}
+        assert attrs(captured)["statifier.driver"] == Atom.to_string(driver)
+      end
+    end
+
+    # sabotage: put_driver/2's `nil` clause changed to store "nil" -> red
+    test "an event with no driver key omits the attribute rather than encoding nil" do
+      span_ref = make_ref()
+      emit_start("session-nodriver", :event, "go", span_ref, System.monotonic_time())
+
+      emit_stop(
+        "session-nodriver",
+        :event,
+        :quiescent,
+        "go",
+        MapSet.new(),
+        span_ref,
+        System.monotonic_time()
+      )
+
+      assert_receive {:span, captured}
+      refute Map.has_key?(attrs(captured), "statifier.driver")
+    end
+  end
+
   defp handler_ids do
     :telemetry.list_handlers([:statifier])
     |> Enum.map(& &1.id)

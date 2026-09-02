@@ -70,7 +70,10 @@ exporter:
 This attaches a handler to every event the statifier telemetry contract
 emits. Each statechart macrostep becomes a `statifier.macrostep` span,
 carrying `statifier.session_id`, `statifier.trigger`, `statifier.outcome`,
-and the macrostep's counters and resulting configuration as attributes.
+`statifier.driver` (which stepping driver produced it - `session` for a
+live `Statifier.Session`, the durable stepper's own name for a durable
+macrostep), and the macrostep's counters and resulting configuration as
+attributes.
 The effect and trace events that fire inside the macrostep land on the
 span as span events (`statifier.effect.send`, `statifier.trace.exit_set`,
 ...), attributes mapped uniformly under the `statifier.` namespace: a
