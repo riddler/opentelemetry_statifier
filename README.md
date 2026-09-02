@@ -146,6 +146,50 @@ others. The mechanism is recorded in
 the event contracts themselves are frozen upstream, in
 `statifier_persistence`'s ADR-0009 and `statifier_oban`'s ADR-0006.
 
+### Correlating with a `statifier_ui` trace stream
+
+`statifier_ui` renders the same runs these spans describe, and its trace
+wire format reserves an optional `otel` envelope key carrying the W3C
+trace and span ids of the `statifier.macrostep` span a message belongs
+to (its ADR-0013). That key is filled in by a **producer** the host
+supplies to the subscriber:
+
+```
+otel_context: (session_id, macrostep ->
+                 {:ok, %{trace_id: binary, span_id: binary}} | :none)
+```
+
+`OpentelemetryStatifier.SpanContext.lookup/2` is that function, with that
+arity and that return shape, so wiring the two together is a capture and
+nothing else:
+
+```elixir
+StatifierUI.Trace.Subscriber.start_link(
+  session: session,
+  otel_context: &OpentelemetryStatifier.SpanContext.lookup/2
+)
+```
+
+(The subscriber's `:otel_context` option is `statifier_ui`'s own follow-up
+to that record; this side of the seam is ready for it.)
+
+It reads the span table this bridge already keeps for its link
+stitching - no OTel context is created, entered, or attached, so it is
+safe to call from the subscriber's own process. The lookup is keyed on
+`(session_id, macrostep)` rather than "whatever span is open now"
+precisely because that process consumes asynchronously: under lag,
+"current" would stamp the wrong macrostep.
+
+`:none` is an ordinary answer, and the wire format degrades to simply
+omitting the key. You get it when the bridge was never set up, when the
+session is unknown, and - the common one - when the subscriber has fallen
+far enough behind that the macrostep's span has already closed. The pair
+is never half-written: both ids or neither.
+
+Hosts that passed `:table` to `setup/1` use the three-arity form,
+`&OpentelemetryStatifier.SpanContext.lookup(&1, &2, :my_table)`, which is
+still the two-arity function the format asks for.
+
 ### The `:initialize` macrostep span starts late
 
 Span start times come from the telemetry event's own `monotonic_time`, so

@@ -188,20 +188,41 @@ defmodule OpentelemetryStatifier.Handler do
   # already a published caveat of the event contract.
   @spec add_span_event(Config.t(), String.t(), String.t(), map(), map()) :: :ok
   defp add_span_event(%Config{table: table} = config, session_id, name, measurements, metadata) do
-    case SpanTable.fetch_innermost_open_span(table, session_id) do
-      {:ok, %SpanEntry{span_ctx: span_ctx}} ->
+    case SpanTable.fetch_innermost_open_row(table, session_id) do
+      {:ok, span_ref, %SpanEntry{span_ctx: span_ctx} = entry} ->
         OpenTelemetry.Span.add_event(
           span_ctx,
           name,
           Attributes.span_event_attributes(measurements, metadata, config)
         )
 
-        :ok
+        record_macrostep(table, span_ref, entry, Map.get(measurements, :macrostep))
 
       :error ->
         :ok
     end
   end
+
+  # Stamps the open span with the macrostep counter it covers, so
+  # `OpentelemetryStatifier.SpanContext.lookup/2` can answer a keyed
+  # `(session_id, macrostep)` read. The counter has to come from here
+  # because `[:statifier, :session, :macrostep, :start]` carries no
+  # `macrostep` measurement and the `:stop` half arrives too late to be
+  # looked up against - but every event that reaches this function does
+  # carry one (st-ADR-0040's event table), so the first intra-macrostep
+  # event of a macrostep supplies it and the rest are a no-op. Defensive
+  # like every other read here: a missing or malformed counter leaves the
+  # field alone rather than raising, exactly as it leaves the span event
+  # itself intact.
+  @spec record_macrostep(atom(), reference(), SpanEntry.t(), term()) :: :ok
+  defp record_macrostep(_table, _span_ref, %SpanEntry{macrostep: macrostep}, macrostep), do: :ok
+
+  defp record_macrostep(table, span_ref, entry, macrostep)
+       when is_integer(macrostep) and macrostep >= 0 do
+    SpanTable.put_open_span(table, span_ref, %SpanEntry{entry | macrostep: macrostep})
+  end
+
+  defp record_macrostep(_table, _span_ref, _entry, _macrostep), do: :ok
 
   # The two links the design note stitches macrostep traces with, both
   # attached at span start because OTel links cannot be added later:
