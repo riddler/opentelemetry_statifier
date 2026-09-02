@@ -47,6 +47,12 @@ defmodule OpentelemetryStatifier.SpanTable do
   event alone". This `GenServer` runs the sweep on a timer; tests call
   `sweep/1` directly.
 
+  The `%SpanEntry{}` in a `:span` row gains its `macrostep` counter after
+  the fact: the macrostep `:start` event carries no such measurement, so
+  the handler stamps it from the first intra-macrostep event that lands
+  on the span. `fetch_open_span_ctx/3` is the keyed
+  `(session_id, macrostep)` read that field exists for.
+
   `session_id` is duplicated into element 2 of every row shape so a
   sweeper can find every row for a session with one
   `:ets.match_object/2` or `:ets.match_delete/2`, without decoding either
@@ -137,17 +143,72 @@ defmodule OpentelemetryStatifier.SpanTable do
   """
   @spec fetch_innermost_open_span(atom(), String.t()) :: {:ok, SpanEntry.t()} | :error
   def fetch_innermost_open_span(table, session_id) do
+    case fetch_innermost_open_row(table, session_id) do
+      {:ok, _span_ref, entry} -> {:ok, entry}
+      :error -> :error
+    end
+  end
+
+  @doc """
+  As `fetch_innermost_open_span/2`, but also returns the `span_ref` the
+  entry is keyed under, so a caller that has just read the row can write
+  an updated one back through `put_open_span/3` without a second scan of
+  the table. `OpentelemetryStatifier.Handler` uses it on the span-event
+  path, where every event both lands on the innermost span and carries
+  the `macrostep` counter that span is missing.
+  """
+  @spec fetch_innermost_open_row(atom(), String.t()) ::
+          {:ok, reference(), SpanEntry.t()} | :error
+  def fetch_innermost_open_row(table, session_id) do
     case :ets.match_object(table, {{:span, :_}, session_id, :_}) do
       [] ->
         :error
 
       rows ->
-        {_key, _session_id, entry} =
+        {{:span, span_ref}, _session_id, entry} =
           Enum.max_by(rows, fn {_key, _session_id, %SpanEntry{started_at: started_at}} ->
             started_at
           end)
 
-        {:ok, entry}
+        {:ok, span_ref, entry}
+    end
+  end
+
+  @doc """
+  Fetches the span context of the open macrostep span `session_id`
+  recorded `macrostep` on, or `:error` when there is none - an unknown
+  session, a macrostep whose span has already closed, or an open span
+  that has not yet seen an event carrying the counter.
+
+  This is a **read**, and deliberately only a read: it returns a stored
+  context, never attaches one, so ADR-0003 decision 8's rule that the
+  bridge neither inherits nor clobbers a process's ambient context is
+  untouched. `OpentelemetryStatifier.SpanContext.lookup/2` is the public
+  face of it.
+
+  Under st-ADR-0039 re-entry a session can hold two macrostep spans open
+  at once; they carry different counters in the ordinary case, and the
+  innermost wins if they do not.
+  """
+  @spec fetch_open_span_ctx(atom(), String.t(), non_neg_integer()) ::
+          {:ok, OpenTelemetry.span_ctx()} | :error
+  def fetch_open_span_ctx(table, session_id, macrostep) when is_integer(macrostep) do
+    table
+    |> :ets.match_object({{:span, :_}, session_id, :_})
+    |> Enum.filter(fn {_key, _session_id, %SpanEntry{macrostep: recorded}} ->
+      recorded == macrostep
+    end)
+    |> case do
+      [] ->
+        :error
+
+      rows ->
+        {_key, _session_id, %SpanEntry{span_ctx: span_ctx}} =
+          Enum.max_by(rows, fn {_key, _session_id, %SpanEntry{started_at: started_at}} ->
+            started_at
+          end)
+
+        {:ok, span_ctx}
     end
   end
 

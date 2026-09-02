@@ -63,6 +63,13 @@ defmodule OpentelemetryStatifier do
   span nests inside the `statifier_persistence.run.step` span around it
   rather than rooting its own trace; with neither attached, nothing here
   behaves differently (ADR-0004).
+
+  `OpentelemetryStatifier.SpanContext.lookup/2` is the one read the bridge
+  offers back: the open macrostep span for a `(session_id, macrostep)`
+  pair, as its W3C trace and span ids. It exists so a `statifier_ui`
+  trace subscriber can be handed it as the `:otel_context` producer that
+  package's ADR-0013 specifies, and it is only ever a read of the span
+  table - no OTel context is created, entered, or attached.
   """
 
   alias OpentelemetryStatifier.{Config, Handler}
