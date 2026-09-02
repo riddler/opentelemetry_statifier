@@ -51,8 +51,12 @@ defmodule OpentelemetryStatifier.Oban do
   `StatifierOban.Telemetry.events/0`, for the reason
   `OpentelemetryStatifier.Persistence`'s moduledoc gives: bridging a
   sibling must not make that sibling - and Oban, and a database - a
-  dependency of every host that wants statechart tracing. `ots-41k`
-  carries the automatic drift test.
+  dependency of every host that wants statechart tracing.
+
+  The list is not checked by hand either. `statifier_oban` is a
+  `only: :test, runtime: false` dependency, and
+  `test/opentelemetry_statifier/sibling_event_drift_test.exs` asserts this
+  list against `StatifierOban.Telemetry.events/0` on every gate run.
   """
 
   alias OpentelemetryStatifier.Config

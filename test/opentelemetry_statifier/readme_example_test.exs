@@ -170,12 +170,16 @@ defmodule OpentelemetryStatifier.ReadmeExampleTest do
       assert span(captured_span, :name) == "statifier.macrostep"
     end
 
+    # `statifier.driver` end to end: the real interpreter emits
+    # `driver: :session` (st-ADR-0067 decision 4) and the bridge maps it, so
+    # a backend tells a session-hosted macrostep from a durable one.
     assert %{
              "statifier.session_id" => "sess_card",
              "statifier.trigger" => "initialize",
              "statifier.outcome" => "quiescent",
              "statifier.configuration" => ["idle"],
-             "statifier.macrostep" => 1
+             "statifier.macrostep" => 1,
+             "statifier.driver" => "session"
            } = attrs(initialize)
 
     # Each macrostep roots its own trace; the first has no predecessor to

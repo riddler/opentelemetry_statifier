@@ -76,6 +76,16 @@ defmodule OpentelemetryStatifier.MixProject do
       # bridge emits. The library itself depends only on the API.
       {:opentelemetry, "~> 1.5", only: :test},
 
+      # Test-only: the sibling packages this bridge mirrors, so the drift
+      # test can compare each literal event list against the sibling's own
+      # `Telemetry.events/0`. They are `only: :test, runtime: false` - a
+      # host that wants statechart tracing must never pull Ecto, a database
+      # driver, or Oban in through this package (st-ADR-0062, ots-ADR-0004),
+      # and the Hex package's requirements are unaffected because `only:`
+      # deps are not published requirements.
+      {:statifier_persistence, "~> 0.5", only: :test, runtime: false},
+      {:statifier_oban, "~> 0.5", only: :test, runtime: false},
+
       # Dev / test
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
