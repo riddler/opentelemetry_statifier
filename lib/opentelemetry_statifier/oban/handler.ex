@@ -4,9 +4,11 @@ defmodule OpentelemetryStatifier.Oban.Handler do
   `OpentelemetryStatifier.Oban.events/0` returns.
 
   Two clauses do the whole family, because the contract has exactly two
-  seams and no pairs: a scheduling event lands on the macrostep span open
-  in the emitting process, and a delivery event becomes its own span
-  linked to the arming trace. The defensive posture is
+  seams and no pairs: a scheduling event lands on the span open in the
+  emitting process - the macrostep span when the session is stepping
+  there, the durable driver's step span when a durable run id is all the
+  event carries - and a delivery event becomes its own span linked to
+  the arming trace. The defensive posture is
   `OpentelemetryStatifier.Handler`'s - no `try`/`rescue`, exhaustive
   clauses, a catch-all that drops rather than raises inside a host's Oban
   worker.
@@ -43,10 +45,12 @@ defmodule OpentelemetryStatifier.Oban.Handler do
   end
 
   # The scheduling seam: synchronous, on the process that drove the
-  # macrostep, so the macrostep span is open right there and the durable
-  # consequence of the chart's decision belongs on it. `scope` is looked
-  # up as the session id it corresponds to; a scope that is a host's
-  # durable run id matches nothing, and the event becomes its own span.
+  # macrostep, so the span the durable consequence of the chart's
+  # decision belongs on is open right there. `scope` is looked up as the
+  # session id it corresponds to first; a scope that is a host's durable
+  # run id matches no session, and the event falls back to whatever this
+  # bridge has open in the emitting process - the durable driver's step
+  # span. Only when neither is open does it become its own span.
   def handle_event(
         [:statifier_oban, seam, _kind] = event,
         measurements,
@@ -57,7 +61,7 @@ defmodule OpentelemetryStatifier.Oban.Handler do
     Sibling.point(
       config,
       Sibling.name(event),
-      {:session, Map.get(metadata, :scope)},
+      [{:session, Map.get(metadata, :scope)}, {:process, self()}],
       attributes(measurements, metadata, config),
       []
     )
