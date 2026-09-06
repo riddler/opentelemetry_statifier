@@ -10,6 +10,23 @@ fragment in [`changelog.d/`](changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.5.0] 2026-09-06
+
+Minor release: the bridge now covers `statifier_oban`'s fan-out events, so a
+chunk child's spans are reachable from the dispatch that planned them. The
+test-only `statifier_oban` requirement moves to `~> 0.9`, because the fan-out
+events this release bridges are 0.9.0's.
+
+### Added
+
+- `OpentelemetryStatifier.Oban` bridges `statifier_oban`'s three fan-out
+  events. `invoke.fan_out` and `invoke.child_started` become roots linked
+  to the trace that planned the invocation, so every chunk child is
+  reachable from the parent's dispatch by a link edge rather than only by
+  a shared `statifier.session_id`; `invoke.unstarted_cancelled` carries no
+  caller context and lands as a span event on the span open where the
+  sweep ran, putting its count in the trace either way.
+
 ## [0.4.1] 2026-09-06
 
 Patch release: an Oban scheduling point emitted under a durable driver now
