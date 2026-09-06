@@ -6,7 +6,7 @@ defmodule OpentelemetryStatifier.ObanTest do
 
   import OpentelemetryStatifier.SpanCapture
 
-  alias OpentelemetryStatifier.{Oban, SpanCapture, SpanTable}
+  alias OpentelemetryStatifier.{Oban, Persistence, SpanCapture, SpanTable}
   alias OpentelemetryStatifier.Oban.Handler
 
   @traceparent "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -67,6 +67,39 @@ defmodule OpentelemetryStatifier.ObanTest do
         conflict?: false,
         job_id: 99,
         caller_context: caller_context
+      }
+    )
+  end
+
+  defp emit_invoke_cancelled(scope) do
+    :telemetry.execute(
+      [:statifier_oban, :invoke, :cancelled],
+      %{system_time: System.system_time(), count: 0},
+      %{scope: scope, invoke_id: "i1", handler: StatifierOban.Invoke.Handler}
+    )
+  end
+
+  defp emit_step_start(run_id, span_ref) do
+    :telemetry.execute(
+      [:statifier_persistence, :run, :step, :start],
+      %{system_time: System.system_time(), monotonic_time: System.monotonic_time()},
+      %{run_id: run_id, entry: :step, span_ref: span_ref}
+    )
+  end
+
+  defp emit_step_stop(run_id, span_ref) do
+    :telemetry.execute(
+      [:statifier_persistence, :run, :step, :stop],
+      %{duration: 4242, monotonic_time: System.monotonic_time()},
+      %{
+        run_id: run_id,
+        session_id: "session-o6",
+        content_hash: "abc123",
+        entry: :step,
+        outcome: :ok,
+        status: :active,
+        reason: nil,
+        span_ref: span_ref
       }
     )
   end
@@ -205,6 +238,33 @@ defmodule OpentelemetryStatifier.ObanTest do
       # ends: the ETS table dies with the test process, and a handler
       # still inside it would raise and be detached for the VM's life.
       assert_receive :stopped
+    end
+
+    # sabotage: the scheduling clause hosts on {:session, scope} alone,
+    # without the {:process, self()} fallback -> red (the point roots its
+    # own trace instead of landing on the durable driver's step span)
+    test "falls back to the step span open here when scope is a durable run id", %{table: table} do
+      :ok = Persistence.setup(table: table)
+      on_exit(&Persistence.teardown/0)
+
+      span_ref = make_ref()
+
+      # No session is registered under "run-o6": under a durable driver
+      # `scope` is the host's run id, so the session lookup misses and
+      # the step span open in this process is what the point belongs on.
+      emit_step_start("run-o6", span_ref)
+      emit_invoke_cancelled("run-o6")
+      emit_step_stop("run-o6", span_ref)
+
+      assert :error = SpanTable.fetch_session_pid(table, "run-o6")
+
+      assert_receive {:span, step}
+      assert span(step, :name) == "statifier_persistence.run.step"
+
+      assert [{"statifier_oban.invoke.cancelled", attributes}] = span_events(step)
+      assert attributes["statifier.session_id"] == "run-o6"
+      assert attributes["statifier_oban.count"] == 0
+      assert attributes["statifier_oban.invoke_id"] == "i1"
     end
   end
 

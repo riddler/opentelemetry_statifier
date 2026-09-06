@@ -57,6 +57,16 @@ defmodule OpentelemetryStatifier.Sibling do
   knows is running somewhere it has nothing open - inside an Oban job,
   days after the macrostep that armed it - where the span it becomes is
   a root linked to the arming trace rather than a child of anything.
+
+  A **list** of hosts is an ordered fallback: the first member with an
+  open span wins, and a list every member of which misses misses exactly
+  as a single host would. It is what a sibling family whose correlation
+  key is not always a session id needs. `statifier_oban`'s `scope` is the
+  session id under the family's own stepper and a host's durable run id
+  under a durable driver, so its scheduling seam asks for the session
+  first and for the calling process second - the durable driver's step
+  span is open right there, and the pid check the session shape carries
+  is what makes the second ask safe.
   """
   @type host :: {:process, pid()} | {:session, String.t() | nil} | :detached
 
@@ -121,9 +131,10 @@ defmodule OpentelemetryStatifier.Sibling do
   @doc """
   Records a point-in-time event named `name`: a span event on the bridge
   span `host` names when one is open, and its own zero-duration span
-  linked to `links` when none is.
+  linked to `links` when none is. A list of hosts is tried in order and
+  the first open span wins.
   """
-  @spec point(Config.t(), String.t(), host(), map(), [OpenTelemetry.link()]) :: :ok
+  @spec point(Config.t(), String.t(), host() | [host()], map(), [OpenTelemetry.link()]) :: :ok
   def point(%Config{table: table} = config, name, host, attributes, links) do
     case open_host_span(table, host) do
       {:ok, span_ctx} ->
@@ -185,7 +196,16 @@ defmodule OpentelemetryStatifier.Sibling do
   @spec name([atom()]) :: String.t()
   def name(event) when is_list(event), do: Enum.map_join(event, ".", &Atom.to_string/1)
 
-  @spec open_host_span(atom(), host()) :: {:ok, OpenTelemetry.span_ctx()} | :error
+  @spec open_host_span(atom(), host() | [host()]) :: {:ok, OpenTelemetry.span_ctx()} | :error
+  defp open_host_span(table, hosts) when is_list(hosts) do
+    Enum.reduce_while(hosts, :error, fn host, :error ->
+      case open_host_span(table, host) do
+        {:ok, span_ctx} -> {:halt, {:ok, span_ctx}}
+        :error -> {:cont, :error}
+      end
+    end)
+  end
+
   defp open_host_span(_table, :detached), do: :error
 
   defp open_host_span(table, {:process, pid}) do
