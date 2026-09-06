@@ -157,7 +157,7 @@ repo's ADRs adopt it rather than restating it:
 - The sibling event contracts, frozen in their own repos and never
   restated here: `statifier_persistence`'s ADR-0009 and `docs/telemetry.md`
   (14 events), `statifier_oban`'s ADR-0006 and `docs/telemetry.md`
-  (11 events).
+  (14 events).
 
 Two rules that do not wait to be looked up:
 

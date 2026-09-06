@@ -41,10 +41,20 @@ defmodule OpentelemetryStatifier.SiblingEventDriftTest do
       assert Enum.sort(Oban.events()) == Enum.sort(StatifierOban.Telemetry.events())
     end
 
-    # sabotage: an eleventh name deleted from Oban's @events -> red
-    test "the bridged list carries the contract's 11 names" do
-      assert length(Oban.events()) == 11
-      assert length(StatifierOban.Telemetry.events()) == 11
+    # sabotage: a fourteenth name deleted from Oban's @events -> red
+    test "the bridged list carries the contract's 14 names" do
+      assert length(Oban.events()) == 14
+      assert length(StatifierOban.Telemetry.events()) == 14
+    end
+
+    # sabotage: `[:statifier_oban, :invoke, :child_started]` deleted from
+    # Oban's @events -> red
+    test "the fan-out seam's three kinds are bridged" do
+      kinds = for [:statifier_oban, :invoke, kind] <- Oban.events(), do: kind
+
+      assert :fan_out in kinds
+      assert :child_started in kinds
+      assert :unstarted_cancelled in kinds
     end
   end
 end

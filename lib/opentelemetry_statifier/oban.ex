@@ -12,7 +12,7 @@ defmodule OpentelemetryStatifier.Oban do
       OpentelemetryStatifier.setup()
       OpentelemetryStatifier.Oban.setup()
 
-  This module bridges `statifier_oban`'s eleven events and nothing else.
+  This module bridges `statifier_oban`'s fourteen events and nothing else.
   Oban's own `[:oban, :job, ...]` spans are `opentelemetry_oban`'s to
   produce, and a host wanting both attaches both - the reason
   `statifier_oban` deliberately emits no duration, no attempt timing and
@@ -22,7 +22,7 @@ defmodule OpentelemetryStatifier.Oban do
 
   Every event in this family is a point - that contract has no
   `:start`/`:stop` pairs, because Oban owns every interval it could
-  bracket - and the two seams land differently, exactly as the contract
+  bracket - and the seams land differently, exactly as the contract
   describes:
 
     * **The scheduling seam** (`:scheduled`, `:schedule_rejected`,
@@ -39,6 +39,33 @@ defmodule OpentelemetryStatifier.Oban do
       parenthood would hold the arming trace open for the length of the
       delay. With no `caller_context`, the span is simply unlinked - the
       ordinary detached case, correlated by `statifier.session_id`.
+    * **The fan-out seam** (`:fan_out`, `:child_started`,
+      `:unstarted_cancelled`) splits across the two shapes above rather
+      than adding a third. `:fan_out` and `:child_started` fire inside
+      Oban jobs - the fan-out worker, and one child-start worker per
+      item - and both carry `caller_context`, so they take the delivery
+      shape: a root span **linked** to the trace that planned the
+      invocation. That link is what makes every chunk child reachable
+      from the parent's dispatch step by an edge rather than only by a
+      shared `statifier.session_id`. `:unstarted_cancelled` carries no
+      `caller_context` and so has no link source; it fires from the
+      sweep, synchronously on whichever process ran it, so it takes the
+      scheduling shape and lands as a span event on the span open there,
+      becoming its own root only when there is none. Its `count` is the
+      fact worth having in the trace, and both shapes put it there.
+
+  **`:child_started` is a linked root, not a parent.** `statifier_oban`
+  emits it *after* the child-starter seam returns, so by the time the
+  bridge sees it the child's own
+  `statifier_persistence.run.step` span has already opened and closed in
+  that process: there is no window in which this bridge could have the
+  start span open around them. Nesting them under it would need an event
+  the contract does not have, and reaching past the public events for
+  one is what `st-ADR-0062` and `ots-ADR-0002` forbid. A host with its
+  own durable driver that wants the nesting has the sanctioned door -
+  `OpentelemetryStatifier.Parent.register/2` - and everyone else gets
+  the link edge, which is what the reachability question actually asks
+  for.
 
   `scope` is the correlation key here (it is either a live session's id
   or a host's durable run id, and this package cannot tell which), and it
@@ -47,7 +74,7 @@ defmodule OpentelemetryStatifier.Oban do
 
   ## The event list
 
-  The 11 names below are literal here rather than read from
+  The 14 names below are literal here rather than read from
   `StatifierOban.Telemetry.events/0`, for the reason
   `OpentelemetryStatifier.Persistence`'s moduledoc gives: bridging a
   sibling must not make that sibling - and Oban, and a database - a
@@ -73,7 +100,10 @@ defmodule OpentelemetryStatifier.Oban do
     [:statifier_oban, :invoke, :cancelled],
     [:statifier_oban, :invoke, :delivered],
     [:statifier_oban, :invoke, :discarded],
-    [:statifier_oban, :invoke, :failed]
+    [:statifier_oban, :invoke, :failed],
+    [:statifier_oban, :invoke, :fan_out],
+    [:statifier_oban, :invoke, :child_started],
+    [:statifier_oban, :invoke, :unstarted_cancelled]
   ]
 
   @doc """
@@ -83,7 +113,7 @@ defmodule OpentelemetryStatifier.Oban do
   ## Examples
 
       iex> length(OpentelemetryStatifier.Oban.events())
-      11
+      14
 
   """
   @spec events() :: [:telemetry.event_name()]
