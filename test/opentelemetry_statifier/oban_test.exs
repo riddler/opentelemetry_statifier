@@ -119,6 +119,45 @@ defmodule OpentelemetryStatifier.ObanTest do
     )
   end
 
+  defp emit_fan_out(scope, count, caller_context) do
+    :telemetry.execute(
+      [:statifier_oban, :invoke, :fan_out],
+      %{system_time: System.system_time(), count: count},
+      %{
+        scope: scope,
+        invoke_id: "i-fan",
+        handler: StatifierOban.Invoke.Handler,
+        policy: :first_error,
+        queue: :invokes,
+        job_id: 700,
+        caller_context: caller_context
+      }
+    )
+  end
+
+  defp emit_child_started(scope, index, count, caller_context) do
+    :telemetry.execute(
+      [:statifier_oban, :invoke, :child_started],
+      %{system_time: System.system_time(), attempt: 1},
+      %{
+        scope: scope,
+        invoke_id: "i-fan",
+        index: index,
+        count: count,
+        job_id: 800 + index,
+        caller_context: caller_context
+      }
+    )
+  end
+
+  defp emit_unstarted_cancelled(scope, count) do
+    :telemetry.execute(
+      [:statifier_oban, :invoke, :unstarted_cancelled],
+      %{system_time: System.system_time(), count: count},
+      %{scope: scope, invoke_id: "i-fan"}
+    )
+  end
+
   defp span_events(captured) do
     captured
     |> span(:events)
@@ -139,7 +178,7 @@ defmodule OpentelemetryStatifier.ObanTest do
     # sabotage: setup/1 attaches with :telemetry.attach_many/4 under one
     # shared id -> red (the per-event ids the assertion reads are absent)
     test "attaches one handler id per event name, ADR-0003 decision 2's discipline" do
-      assert length(Oban.events()) == 11
+      assert length(Oban.events()) == 14
 
       for event <- Oban.events() do
         assert [handler] = :telemetry.list_handlers(event)
@@ -332,6 +371,108 @@ defmodule OpentelemetryStatifier.ObanTest do
       emit_fired("session-o5", %{"host" => "term the bridge cannot read"})
       assert_receive {:span, opaque}
       assert span_links(opaque) == []
+    end
+  end
+
+  describe "the fan-out seam" do
+    @fan_out_trace_id 0x4BF92F3577B34DA6A3CE929D0E0E4736
+    @fan_out_span_id 0x00F067AA0BA902B7
+
+    # sabotage: `:fan_out` removed from Handler's @delivery -> red (the
+    # dispatch falls through to the scheduling clause and loses its link)
+    test "the dispatch becomes a root linked to the trace that planned it" do
+      emit_fan_out("session-f1", 3, %{"traceparent" => @traceparent})
+
+      assert_receive {:span, fan_out}
+      assert span(fan_out, :name) == "statifier_oban.invoke.fan_out"
+      assert span(fan_out, :parent_span_id) == :undefined
+      assert span_links(fan_out) == [{@fan_out_trace_id, @fan_out_span_id}]
+
+      attributes = SpanCapture.attributes(span(fan_out, :attributes))
+      assert attributes["statifier.session_id"] == "session-f1"
+      assert attributes["statifier_oban.invoke_id"] == "i-fan"
+      assert attributes["statifier_oban.count"] == 3
+      assert attributes["statifier_oban.policy"] == "first_error"
+      assert attributes["statifier_oban.queue"] == "invokes"
+      assert attributes["statifier_oban.handler"] == "Elixir.StatifierOban.Invoke.Handler"
+    end
+
+    # sabotage: `:child_started` removed from Handler's @delivery -> red
+    # (each child roots an unlinked trace, reachable only by shared ids)
+    test "every chunk child is reachable from the planning trace by a link edge" do
+      emit_fan_out("session-f2", 3, %{"traceparent" => @traceparent})
+      assert_receive {:span, _fan_out}
+
+      for index <- 0..2,
+          do:
+            emit_child_started("session-f2", index, 3, %{
+              "traceparent" => @traceparent
+            })
+
+      children =
+        for _index <- 0..2 do
+          assert_receive {:span, child}
+          child
+        end
+
+      for child <- children do
+        assert span(child, :name) == "statifier_oban.invoke.child_started"
+
+        # A link and never a parent, for the delivery seam's reason: the
+        # fan-out's own job has long since finished.
+        assert span(child, :parent_span_id) == :undefined
+        assert span_links(child) == [{@fan_out_trace_id, @fan_out_span_id}]
+      end
+
+      indices =
+        for child <- children do
+          attributes = SpanCapture.attributes(span(child, :attributes))
+          assert attributes["statifier.session_id"] == "session-f2"
+          assert attributes["statifier_oban.count"] == 3
+          assert attributes["statifier_oban.attempt"] == 1
+          attributes["statifier_oban.index"]
+        end
+
+      assert Enum.sort(indices) == [0, 1, 2]
+    end
+
+    # sabotage: `:unstarted_cancelled` added to Handler's @delivery ->
+    # red (the sweep roots its own trace instead of landing on the span
+    # open in the process that swept)
+    test "the unstarted-cancel count lands on the span open where the sweep ran", %{table: table} do
+      :ok = Persistence.setup(table: table)
+      on_exit(&Persistence.teardown/0)
+
+      span_ref = make_ref()
+
+      emit_step_start("run-f3", span_ref)
+      emit_unstarted_cancelled("run-f3", 2)
+      emit_step_stop("run-f3", span_ref)
+
+      assert_receive {:span, step}
+      assert span(step, :name) == "statifier_persistence.run.step"
+
+      assert [{"statifier_oban.invoke.unstarted_cancelled", attributes}] = span_events(step)
+      assert attributes["statifier.session_id"] == "run-f3"
+      assert attributes["statifier_oban.count"] == 2
+      assert attributes["statifier_oban.invoke_id"] == "i-fan"
+    end
+
+    # sabotage: Sibling.point/5's `:error` branch drops the event instead
+    # of opening a detached span -> red (a sweep with nothing open loses
+    # its count entirely)
+    test "a sweep with nothing open here still puts its count in the trace" do
+      # `0` is data, not an error: a first_error fan-out whose children
+      # have all already started cancels nothing.
+      emit_unstarted_cancelled("session-f4", 0)
+
+      assert_receive {:span, cancelled}
+      assert span(cancelled, :name) == "statifier_oban.invoke.unstarted_cancelled"
+      assert span_links(cancelled) == []
+
+      attributes = SpanCapture.attributes(span(cancelled, :attributes))
+      assert attributes["statifier.session_id"] == "session-f4"
+      assert attributes["statifier_oban.count"] == 0
     end
   end
 end

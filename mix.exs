@@ -84,7 +84,7 @@ defmodule OpentelemetryStatifier.MixProject do
       # and the Hex package's requirements are unaffected because `only:`
       # deps are not published requirements.
       {:statifier_persistence, "~> 0.5", only: :test, runtime: false},
-      {:statifier_oban, "~> 0.5", only: :test, runtime: false},
+      {:statifier_oban, "~> 0.9", only: :test, runtime: false},
 
       # Dev / test
       {:ex_quality, "~> 0.14", only: :dev, runtime: false},

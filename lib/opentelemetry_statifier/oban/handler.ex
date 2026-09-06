@@ -3,12 +3,16 @@ defmodule OpentelemetryStatifier.Oban.Handler do
   The `:telemetry` handler attached to every name
   `OpentelemetryStatifier.Oban.events/0` returns.
 
-  Two clauses do the whole family, because the contract has exactly two
-  seams and no pairs: a scheduling event lands on the span open in the
+  Two clauses do the whole family, because the contract has no pairs and
+  only two *shapes*: a scheduling event lands on the span open in the
   emitting process - the macrostep span when the session is stepping
   there, the durable driver's step span when a durable run id is all the
   event carries - and a delivery event becomes its own span linked to
-  the arming trace. The defensive posture is
+  the arming trace. The fan-out seam adds names, not a third shape:
+  `:fan_out` and `:child_started` fire inside Oban jobs carrying
+  `caller_context` and so are delivery-shaped, while
+  `:unstarted_cancelled` carries none, fires synchronously from the
+  sweep, and is scheduling-shaped. The defensive posture is
   `OpentelemetryStatifier.Handler`'s - no `try`/`rescue`, exhaustive
   clauses, a catch-all that drops rather than raises inside a host's Oban
   worker.
@@ -18,15 +22,22 @@ defmodule OpentelemetryStatifier.Oban.Handler do
 
   @mapping Sibling.mapping("statifier_oban", :scope)
 
-  @delivery [:fired, :discarded, :delivered, :failed]
+  # The kinds that fire inside an Oban job and carry `caller_context`.
+  # `:fan_out` and `:child_started` are the fan-out seam's two: the
+  # invocation's dispatch and one per chunk child, each a root linked to
+  # the trace that planned it. `:unstarted_cancelled` is deliberately
+  # absent - it has no `caller_context` to link with and it is emitted
+  # synchronously by the sweep, so it belongs on the span open there.
+  @delivery [:fired, :discarded, :delivered, :failed, :fan_out, :child_started]
 
   @spec handle_event(:telemetry.event_name(), map(), map(), Config.t()) :: :ok
 
-  # The delivery seam: inside an Oban job, days after the macrostep that
-  # armed it and usually on another node. Its own span, linked to the
-  # arming trace through `caller_context` when the host stamped one -
-  # never parented by it, which would hold that trace open for the length
-  # of the delay.
+  # The delivery seam and the fan-out seam's two job-borne events:
+  # inside an Oban job, after the macrostep that armed or planned it and
+  # usually on another node. Its own span, linked to that trace through
+  # `caller_context` when the host stamped one - never parented by it,
+  # which would hold the trace open for the length of the delay, or for
+  # as long as a fan-out takes to start every child.
   def handle_event(
         [:statifier_oban, seam, kind] = event,
         measurements,

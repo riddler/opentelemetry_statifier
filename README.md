@@ -123,7 +123,7 @@ place. The lifecycle events - a run created, terminated, discarded, an
 identity refusal, a failed effect, the child-run seam - land as span
 events on the step span.
 
-`OpentelemetryStatifier.Oban` bridges the durable-timer seam's eleven
+`OpentelemetryStatifier.Oban` bridges the durable seams' fourteen
 `[:statifier_oban, ...]` events. Scheduling events fire on the process
 that drove the macrostep, so they land as span events on that macrostep
 span: the chart's decision and its durable consequence in one span,
@@ -133,8 +133,14 @@ later and usually on another node, so each becomes its own span - linked
 to the trace that armed the timer when your host stamped a W3C
 `traceparent` into `caller_context`, and simply unlinked when it did not.
 A link and never a parent: parenting a fire to the request that armed it
-would hold that trace open for the length of the delay. Oban's own job
-spans stay `opentelemetry_oban`'s to produce; attach both.
+would hold that trace open for the length of the delay. The fan-out
+seam splits between the two: `invoke.fan_out` and `invoke.child_started`
+fire inside Oban jobs and become roots linked to the trace that planned
+the invocation, so every chunk child is reachable from the parent's
+dispatch by an edge rather than only by a shared session id, while
+`invoke.unstarted_cancelled` has no caller context to link with and
+lands as a span event on the span open where the sweep ran. Oban's own
+job spans stay `opentelemetry_oban`'s to produce; attach both.
 
 Each family's attributes live in its own namespace
 (`statifier_persistence.`, `statifier_oban.`), with the correlation key -
