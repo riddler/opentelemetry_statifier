@@ -3,6 +3,7 @@
 
   "beads": {
     "prefix": "ots",
+    "sync": "dolthub",
     "topology": "beads",
     "areas": {
       "labels": [
