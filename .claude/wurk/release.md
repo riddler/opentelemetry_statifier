@@ -8,8 +8,27 @@ override, and nothing below rewrites a step the skill already performs.
 Read this together with `.claude/wurk.json`'s `release` block. Between them
 they name every file a release commit here touches, and no others.
 
-The reference for the shape is `e502eab`, the 0.3.0 prep - the most recent
-release prep in this repo, and the commit every step below is modeled on.
+The reference for every shape below is **the most recent release-prep commit
+on `main`**, resolved when you read this rather than named here. Find it with:
+
+```bash
+git log --oneline --no-patch -L '/@version/,+1:mix.exs'
+```
+
+The first line is the last commit that moved `@version`, and the last commit
+that moved `@version` is the last release prep by definition. Where this file
+and that commit disagree, the commit is the evidence and this file is the
+defect.
+
+**This file names no SHA for that reference, on purpose.** A hard-coded
+reference stops being the most recent the moment the next release lands: the
+sentence that used to sit here named the 0.3.0 prep, and by the time anyone
+read it again four later preps had landed behind its back (`ots-txv`). The
+SHAs that remain below are
+historical claims - "this happened once, in that commit" - and a historical
+claim does not go stale. Nothing here needs editing at a release, and a
+release commit does not touch this file; the table at the end lists every
+file it does touch, and this is not one of them.
 
 ## Why the recipe names no changelog
 
@@ -49,7 +68,8 @@ the table below, in the same change that adds it.
 ## Step B: promote the changelog fragments
 
 Placed where the skill's changelog step would have been, and modeled on the
-0.3.0 prep commit `e502eab`, which is the reference for the shape.
+most recent release-prep commit - the one the command at the top of this file
+resolves, not a SHA written down here.
 
 1. Read every `changelog.d/*.md` fragment except `README.md`. Each is a Keep a
    Changelog section heading followed by its bullets.
@@ -58,7 +78,8 @@ Placed where the skill's changelog step would have been, and modeled on the
    already uses throughout - the bracketed version, a single
    space, then the date, **with no `-` separator between them**. (Keep a
    Changelog's own form has the dash; this file has never used it in any of
-   its five headings, and a release is not the place to change them.)
+   its headings - read them with `grep '^## \[' CHANGELOG.md` - and a release
+   is not the place to change them.)
 
    **The date is the LOCAL date of the machine cutting the prep**, the one
    `date +%F` prints there - not the UTC date, and not a date carried over
@@ -73,9 +94,11 @@ Placed where the skill's changelog step would have been, and modeled on the
    sub-heading, saying what the release is. Unlike some sibling repos this is
    the **rule here, not the exception**: every released section in this file
    carries one, in the form `Minor release: <what changed>` or
-   `Patch release: <what changed>` (`e502eab` wrote "Minor release: the bridge
-   now covers the family sibling packages."). Keep the reasoning for the
-   version choice in the commit body, where `e502eab` put it.
+   `Patch release: <what changed>` (the 0.3.0 prep `e502eab` wrote "Minor
+   release: the bridge now covers the family sibling packages." - a
+   historical example of the form, not the shape reference). Keep the
+   reasoning for the version choice in the commit body, where every prep so
+   far has put it.
 4. Under the lead paragraph, write the fragments' bullets grouped by heading
    and ordered `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`,
    `Security`. **Carry every bullet over byte for byte.** The lead paragraph
@@ -95,29 +118,42 @@ judgement, not a rule that computes it.
 
 ## The README install pin
 
-`release.readme_pin` is `true`. `README.md`'s `def deps` snippet carries
-`{:opentelemetry_statifier, "~> X.Y"}` - the major/minor form with the patch
-component dropped that the skill's step 2 bumps.
+`release.readme_pin` is `true`. `README.md`'s `def deps` snippet carries a
+`{:opentelemetry_statifier, "~> X.Y.0"}` pin - the exact-minor form, with the
+patch component written as `.0` rather than dropped.
 
-Two things about this pin that a release here has to know:
+Three things about this pin that a release here has to know:
 
+- **The form is `~> X.Y.0`, not `~> X.Y`.** The README's pre-1.0 banner
+  recommends pinning to an exact minor, and the install snippet shows what it
+  recommends. A prep writes the `.0` form; it does not "repair" the snippet
+  back to the patch-dropped shape the skill's own step 2 assumes. The two
+  forms admit the same patch releases (`~> 0.6.0` and `~> 0.6` both admit
+  `0.6.1`), so nothing about the rule below changes with the form - only the
+  string written.
 - **The rule: a prep moves the pin to the minor being released.** A major or
-  minor prep rewrites `~> X.Y` to the version it is cutting; a patch prep
-  leaves it alone, because `~> X.Y` already admits the new patch. The format
-  precedent to read the skill's "check a previous release commit rather than
-  inventing the format" step against is `d7e1f38` - the 0.5.0 prep, bead
-  `ots-d7x`, PR 39 - which moved `~> 0.4` to `~> 0.5` and changed no other
-  line of `README.md`.
-- **The pin is current, not stale.** It sits at `~> 0.6` - the
-  `{:opentelemetry_statifier, "~> 0.6"}` line of `README.md`'s `def deps`
-  snippet, `README.md` :57 read at `5651c54` - against `mix.exs` `@version`
-  `0.6.0`, and the last three preps each moved it alongside the bump:
-  `c60fd25` (0.4.0) took it from
-  `~> 0.1` to `~> 0.4`, `d7e1f38` (0.5.0) to `~> 0.5`, and `3f8de48` (0.6.0)
-  to `~> 0.6`. The multi-minor drift `c60fd25` corrected - `bfd5cb5`, the
+  minor prep rewrites `~> X.Y.0` to the version it is cutting, again with the
+  `.0`; a patch prep leaves it alone, because `~> X.Y.0` already admits the
+  new patch. The skill's "check a previous release commit rather than
+  inventing the format" step is satisfied by the resolved reference at the
+  top of this file - and by this section, which states the form outright so
+  that a prep reading a pre-`.0` commit does not copy the older shape.
+- **The pin's current value is not written down here**, for the same reason
+  no current version is. Read it and check it against the version file
+  instead:
+
+  ```bash
+  grep 'opentelemetry_statifier, "~>' README.md   # the pin
+  grep '@version "' mix.exs                       # the version it should track
+  ```
+
+  They should agree on major and minor. If they ever do not, the pin edit
+  repairs the drift in one move rather than stepping one release at a time:
+  it goes straight to the current major/minor, and that is the recipe
+  working, not a mistake to correct back. That happened once - `bfd5cb5`, the
   0.1.0 Hex release prep, wrote `~> 0.1` when it added the Installation
-  section and nothing touched it for three minors - is closed, so the next
-  run steps one minor and has no drift to explain in its commit body.
+  section and nothing touched it for three minors, until `c60fd25` (0.4.0)
+  took it straight to `~> 0.4`.
 
 ## The files a release commit touches
 
