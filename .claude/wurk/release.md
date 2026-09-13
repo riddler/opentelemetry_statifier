@@ -54,11 +54,21 @@ Placed where the skill's changelog step would have been, and modeled on the
 1. Read every `changelog.d/*.md` fragment except `README.md`. Each is a Keep a
    Changelog section heading followed by its bullets.
 2. Insert a new `## [X.Y.Z] YYYY-MM-DD` section into `CHANGELOG.md` directly
-   above the previous version's section, dated today. The heading form is the
-   one the file already uses throughout - the bracketed version, a single
+   above the previous version's section. The heading form is the one the file
+   already uses throughout - the bracketed version, a single
    space, then the date, **with no `-` separator between them**. (Keep a
    Changelog's own form has the dash; this file has never used it in any of
    its five headings, and a release is not the place to change them.)
+
+   **The date is the LOCAL date of the machine cutting the prep**, the one
+   `date +%F` prints there - not the UTC date, and not a date carried over
+   from a campaign journal, which is written in UTC. The two differ for part
+   of every day, and a section dated a day ahead of the commit that wrote it
+   reads as a backdated release. Take the date from `date +%F` at the moment
+   you write the heading (fleet ruling RQ-033-15, 2026-09-06). Sections
+   already shipped are left as they stand: rewriting one to match a
+   convention adopted after it was written loses the record of what the
+   published section said.
 3. Write a short lead paragraph between the heading and the first `### `
    sub-heading, saying what the release is. Unlike some sibling repos this is
    the **rule here, not the exception**: every released section in this file
@@ -91,16 +101,23 @@ component dropped that the skill's step 2 bumps.
 
 Two things about this pin that a release here has to know:
 
-- **The format precedent is `bfd5cb5`, not a prep commit.** No release prep in
-  this repo has ever moved the pin; `bfd5cb5` (the 0.1.0 Hex release prep)
-  wrote `~> 0.1` when it added the Installation section, and nothing has
-  touched it since. That commit is what the skill's "check a previous release
-  commit rather than inventing the format" step should be read against here.
-- **The pin is currently stale on purpose-by-neglect**, sitting at `~> 0.1`
-  while `mix.exs` is at `0.3.0`. The next release run through this recipe will
-  therefore move it by more than one minor. That is the recipe correcting a
-  drift, not a mistake to undo: `~> 0.1` no longer admits the version being
-  released. Say so in the release commit body when it happens.
+- **The rule: a prep moves the pin to the minor being released.** A major or
+  minor prep rewrites `~> X.Y` to the version it is cutting; a patch prep
+  leaves it alone, because `~> X.Y` already admits the new patch. The format
+  precedent to read the skill's "check a previous release commit rather than
+  inventing the format" step against is `d7e1f38` - the 0.5.0 prep, bead
+  `ots-d7x`, PR 39 - which moved `~> 0.4` to `~> 0.5` and changed no other
+  line of `README.md`.
+- **The pin is current, not stale.** It sits at `~> 0.6` - the
+  `{:opentelemetry_statifier, "~> 0.6"}` line of `README.md`'s `def deps`
+  snippet, `README.md` :57 read at `5651c54` - against `mix.exs` `@version`
+  `0.6.0`, and the last three preps each moved it alongside the bump:
+  `c60fd25` (0.4.0) took it from
+  `~> 0.1` to `~> 0.4`, `d7e1f38` (0.5.0) to `~> 0.5`, and `3f8de48` (0.6.0)
+  to `~> 0.6`. The multi-minor drift `c60fd25` corrected - `bfd5cb5`, the
+  0.1.0 Hex release prep, wrote `~> 0.1` when it added the Installation
+  section and nothing touched it for three minors - is closed, so the next
+  run steps one minor and has no drift to explain in its commit body.
 
 ## The files a release commit touches
 
