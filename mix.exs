@@ -83,7 +83,11 @@ defmodule OpentelemetryStatifier.MixProject do
       # driver, or Oban in through this package (st-ADR-0062, ots-ADR-0004),
       # and the Hex package's requirements are unaffected because `only:`
       # deps are not published requirements.
-      {:statifier_persistence, "~> 0.5", only: :test, runtime: false},
+      {:statifier_persistence,
+       git: "https://github.com/riddler/statifier_persistence.git",
+       ref: "05993b09a6038bdb4549fb115a3661f06270c53f",
+       only: :test,
+       runtime: false},
       {:statifier_oban, "~> 0.9", only: :test, runtime: false},
 
       # Dev / test

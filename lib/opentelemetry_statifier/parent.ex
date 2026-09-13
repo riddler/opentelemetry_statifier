@@ -9,8 +9,8 @@ defmodule OpentelemetryStatifier.Parent do
   its neighbours with links (ADR-0003 decision 8). The one exception is
   the family's own durable stepper: with
   `OpentelemetryStatifier.Persistence` attached, a macrostep driven
-  inside a `statifier_persistence.run.step` span nests inside it, so a
-  durable run reads as one tree (ADR-0004 decision 4).
+  inside a `statifier_persistence.execution.step` span nests inside it, so
+  a durable execution reads as one tree (ADR-0004 decision 4).
 
   That nesting was never really about `statifier_persistence`. It is
   about *a* durable stepper: a host with its own storage, its own lock

@@ -57,7 +57,7 @@ defmodule OpentelemetryStatifier.Oban do
   **`:child_started` is a linked root, not a parent.** `statifier_oban`
   emits it *after* the child-starter seam returns, so by the time the
   bridge sees it the child's own
-  `statifier_persistence.run.step` span has already opened and closed in
+  `statifier_persistence.execution.step` span has already opened and closed in
   that process: there is no window in which this bridge could have the
   start span open around them. Nesting them under it would need an event
   the contract does not have, and reaching past the public events for
@@ -68,7 +68,7 @@ defmodule OpentelemetryStatifier.Oban do
   for.
 
   `scope` is the correlation key here (it is either a live session's id
-  or a host's durable run id, and this package cannot tell which), and it
+  or a host's durable execution id, and this package cannot tell which), and it
   maps onto `statifier.session_id` - the rename happens here, once, where
   the mapping is visible, exactly as `statifier_oban`'s note asks.
 

@@ -24,7 +24,7 @@ defmodule OpentelemetryStatifier.SpanTable do
       {{:parent_span, ref},           pid,        %ParentEntry{}}
 
   The `:sibling_span` row is the sibling families' half (ADR-0004): a
-  `[:statifier_persistence, :run, :step, :start]` opens one keyed on the
+  `[:statifier_persistence, :execution, :step, :start]` opens one keyed on the
   same `span_ref` convention, and it carries a **pid** in element 2 where
   the macrostep rows carry a `session_id`, because a step span is scoped
   to the process that drove it rather than to a logical session. That is
@@ -253,7 +253,7 @@ defmodule OpentelemetryStatifier.SpanTable do
 
   @doc """
   Fetches the innermost sibling span open in `pid` - the entry with the
-  greatest `started_at`, since a parent run creating a durable child
+  greatest `started_at`, since a parent execution creating a durable child
   inside its own step holds two step spans open on one process. Returns
   `:error` when the process has none, which is the ordinary case for a
   host that attached only the sibling setups it uses.

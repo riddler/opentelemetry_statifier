@@ -33,7 +33,7 @@ defmodule OpentelemetryStatifier.Handler do
   # is a *root* span (the design note's "one trace per macrostep") in the
   # ordinary case, and a child of this bridge's own open sibling span when
   # there is one: a durable macrostep stepped inside a
-  # `statifier_persistence.run.step` span nests inside it, which is the
+  # `statifier_persistence.execution.step` span nests inside it, which is the
   # topology the design note and sp's `docs/telemetry.md` both describe
   # (ADR-0004 amends ADR-0003 decision 8 to exactly this extent).
   # `span_ref` and `monotonic_time` are bound and guarded in the head: a

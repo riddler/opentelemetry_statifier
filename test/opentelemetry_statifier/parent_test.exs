@@ -57,20 +57,20 @@ defmodule OpentelemetryStatifier.ParentTest do
     )
   end
 
-  defp emit_step_start(run_id, span_ref) do
+  defp emit_step_start(execution_id, span_ref) do
     :telemetry.execute(
-      [:statifier_persistence, :run, :step, :start],
+      [:statifier_persistence, :execution, :step, :start],
       %{system_time: System.system_time(), monotonic_time: System.monotonic_time()},
-      %{run_id: run_id, entry: :step, span_ref: span_ref}
+      %{execution_id: execution_id, entry: :step, span_ref: span_ref}
     )
   end
 
-  defp emit_step_stop(run_id, span_ref) do
+  defp emit_step_stop(execution_id, span_ref) do
     :telemetry.execute(
-      [:statifier_persistence, :run, :step, :stop],
+      [:statifier_persistence, :execution, :step, :stop],
       %{duration: 4242, monotonic_time: System.monotonic_time()},
       %{
-        run_id: run_id,
+        execution_id: execution_id,
         session_id: "session-1",
         content_hash: "abc123",
         entry: :step,
@@ -219,12 +219,12 @@ defmodule OpentelemetryStatifier.ParentTest do
       step_ref = make_ref()
 
       {:ok, registration} = Parent.register(declared, table: table)
-      emit_step_start("run-1", step_ref)
+      emit_step_start("exec-1", step_ref)
       emit_macrostep("session-1")
-      emit_step_stop("run-1", step_ref)
+      emit_step_stop("exec-1", step_ref)
       :ok = Parent.unregister(registration)
 
-      step = receive_span("statifier_persistence.run.step")
+      step = receive_span("statifier_persistence.execution.step")
       macrostep = receive_span("statifier.macrostep")
 
       assert span(step, :parent_span_id) == OpenTelemetry.Span.span_id(declared)
@@ -237,11 +237,11 @@ defmodule OpentelemetryStatifier.ParentTest do
     test "the sibling path is unchanged when nothing is ever declared", %{table: _table} do
       step_ref = make_ref()
 
-      emit_step_start("run-2", step_ref)
+      emit_step_start("exec-2", step_ref)
       emit_macrostep("session-1")
-      emit_step_stop("run-2", step_ref)
+      emit_step_stop("exec-2", step_ref)
 
-      step = receive_span("statifier_persistence.run.step")
+      step = receive_span("statifier_persistence.execution.step")
       macrostep = receive_span("statifier.macrostep")
 
       assert span(step, :parent_span_id) == :undefined
