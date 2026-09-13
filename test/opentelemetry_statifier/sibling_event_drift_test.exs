@@ -35,9 +35,15 @@ defmodule OpentelemetryStatifier.SiblingEventDriftTest do
 
     # The retired durable noun. sp-ADR-0011 moved this family to the
     # `:execution` prefix with no dual emit, so a `:run` segment left in
-    # the attach list is a handler bound to a name nothing emits - silent
-    # data loss rather than a red gate, which is exactly what the list
-    # comparison above cannot see once both sides agree on the wrong name.
+    # the attach list is a handler bound to a name nothing emits.
+    #
+    # A one-sided edit here is caught by the comparison above, which is
+    # the ordinary case. What this asserts on top of it is the direction
+    # of the agreement: the comparison passes whenever the two sides
+    # match, so walking the pin backwards to a release that still spells
+    # the old noun leaves it green while the bridge silently returns to
+    # the retired vocabulary. Naming the retired segment directly is what
+    # survives a pin regression.
     #
     # sabotage: `[:statifier_persistence, :execution, :lock]` put back as
     # `[:statifier_persistence, :run, :lock]` -> red

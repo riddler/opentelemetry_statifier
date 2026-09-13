@@ -83,6 +83,11 @@ defmodule OpentelemetryStatifier.MixProject do
       # driver, or Oban in through this package (st-ADR-0062, ots-ADR-0004),
       # and the Hex package's requirements are unaffected because `only:`
       # deps are not published requirements.
+      # The statifier_persistence pin is TEMPORARY. It is a git ref rather
+      # than a Hex requirement only because the :execution telemetry rename
+      # (sp ADR-0011) is not published yet; it goes back to
+      # {:statifier_persistence, "~> 0.12", only: :test, runtime: false} once
+      # sp 0.12.0 is on Hex, which is ots-5om's job in the 0.6.0 prep.
       {:statifier_persistence,
        git: "https://github.com/riddler/statifier_persistence.git",
        ref: "05993b09a6038bdb4549fb115a3661f06270c53f",

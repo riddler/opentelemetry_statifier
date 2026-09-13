@@ -139,7 +139,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
   describe "the step seam" do
     # sabotage: the step-start clause pairs on execution_id instead of span_ref
     # -> red (take_sibling_span/2 misses and no span is ever ended)
-    test "becomes one span carrying the run's identity" do
+    test "becomes one span carrying the execution's identity" do
       span_ref = make_ref()
 
       emit_step_start("exec-1", span_ref)
@@ -248,7 +248,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     end
 
     # sabotage: point/5 returns :ok instead of calling detached_span/4 on
-    # a miss -> red (a run created outside any step is lost entirely)
+    # a miss -> red (an execution created outside any step is lost entirely)
     test "a point event with no step span open becomes its own span" do
       :telemetry.execute(
         [:statifier_persistence, :execution, :created],
