@@ -60,7 +60,7 @@ defmodule OpentelemetryStatifier do
   `OpentelemetryStatifier.Oban.setup/1`, each attaching only its own
   family - the shape `opentelemetry_ecto` and `opentelemetry_oban`
   compose in a host. With `Persistence` attached, a durable macrostep
-  span nests inside the `statifier_persistence.run.step` span around it
+  span nests inside the `statifier_persistence.execution.step` span around it
   rather than rooting its own trace; with neither attached, nothing here
   behaves differently (ADR-0004).
 

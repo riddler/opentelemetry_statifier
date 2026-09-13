@@ -15,7 +15,7 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   (`statifier_persistence`'s `docs/telemetry.md`):
 
     * the step seam is a pair, and becomes a span;
-    * `[..., :adapter, :call]` and `[..., :run, :lock]` are points that
+    * `[..., :adapter, :call]` and `[..., :execution, :lock]` are points that
       carry a `duration`, and become spans back-dated by it;
     * everything else is a point, and becomes a span event on the step
       span open around it.
@@ -28,11 +28,11 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   @spec handle_event(:telemetry.event_name(), map(), map(), Config.t()) :: :ok
 
   # The step span: the interval this package owns and nothing else
-  # measures. `span_ref` pairs the halves - never `run_id`, which a
+  # measures. `span_ref` pairs the halves - never `execution_id`, which a
   # parent creating a durable child inside its own step has two of open
   # at once, exactly as st-ADR-0039 re-entry does upstream.
   def handle_event(
-        [:statifier_persistence, :run, :step, :start],
+        [:statifier_persistence, :execution, :step, :start],
         %{monotonic_time: monotonic_time} = measurements,
         %{span_ref: span_ref} = metadata,
         %Config{} = config
@@ -40,7 +40,7 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
       when is_reference(span_ref) and is_integer(monotonic_time) do
     Sibling.open_span(
       config,
-      "statifier_persistence.run.step",
+      "statifier_persistence.execution.step",
       span_ref,
       self(),
       monotonic_time,
@@ -49,7 +49,7 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   end
 
   def handle_event(
-        [:statifier_persistence, :run, :step, :stop],
+        [:statifier_persistence, :execution, :step, :stop],
         %{monotonic_time: monotonic_time} = measurements,
         %{span_ref: span_ref} = metadata,
         %Config{} = config
@@ -74,7 +74,7 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
         metadata,
         %Config{} = config
       )
-      when is_integer(duration) and {phase, kind} in [{:adapter, :call}, {:run, :lock}] do
+      when is_integer(duration) and {phase, kind} in [{:adapter, :call}, {:execution, :lock}] do
     Sibling.interval_span(
       config,
       Sibling.name(event),

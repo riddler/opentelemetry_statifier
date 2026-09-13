@@ -20,20 +20,20 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     %{table: table}
   end
 
-  defp emit_step_start(run_id, span_ref, monotonic_time \\ System.monotonic_time()) do
+  defp emit_step_start(execution_id, span_ref, monotonic_time \\ System.monotonic_time()) do
     :telemetry.execute(
-      [:statifier_persistence, :run, :step, :start],
+      [:statifier_persistence, :execution, :step, :start],
       %{system_time: System.system_time(), monotonic_time: monotonic_time},
-      %{run_id: run_id, entry: :step, span_ref: span_ref}
+      %{execution_id: execution_id, entry: :step, span_ref: span_ref}
     )
   end
 
-  defp emit_step_stop(run_id, span_ref, monotonic_time \\ System.monotonic_time()) do
+  defp emit_step_stop(execution_id, span_ref, monotonic_time \\ System.monotonic_time()) do
     :telemetry.execute(
-      [:statifier_persistence, :run, :step, :stop],
+      [:statifier_persistence, :execution, :step, :stop],
       %{duration: 4242, monotonic_time: monotonic_time},
       %{
-        run_id: run_id,
+        execution_id: execution_id,
         session_id: "session-p1",
         content_hash: "abc123",
         entry: :step,
@@ -92,7 +92,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     # sabotage: setup/1 attaches with :telemetry.attach_many/4 under one
     # shared id -> red (the per-event ids the assertion reads are absent)
     test "attaches one handler id per event name, ADR-0003 decision 2's discipline" do
-      assert length(Persistence.events()) == 14
+      assert length(Persistence.events()) == 16
 
       for event <- Persistence.events() do
         assert [handler] = :telemetry.list_handlers(event)
@@ -137,19 +137,19 @@ defmodule OpentelemetryStatifier.PersistenceTest do
   end
 
   describe "the step seam" do
-    # sabotage: the step-start clause pairs on run_id instead of span_ref
+    # sabotage: the step-start clause pairs on execution_id instead of span_ref
     # -> red (take_sibling_span/2 misses and no span is ever ended)
     test "becomes one span carrying the run's identity" do
       span_ref = make_ref()
 
-      emit_step_start("run-1", span_ref)
-      emit_step_stop("run-1", span_ref)
+      emit_step_start("exec-1", span_ref)
+      emit_step_stop("exec-1", span_ref)
 
       assert_receive {:span, step}
-      assert span(step, :name) == "statifier_persistence.run.step"
+      assert span(step, :name) == "statifier_persistence.execution.step"
 
       attributes = SpanCapture.attributes(span(step, :attributes))
-      assert attributes["statifier_persistence.run_id"] == "run-1"
+      assert attributes["statifier_persistence.execution_id"] == "exec-1"
       assert attributes["statifier_persistence.entry"] == "step"
       assert attributes["statifier_persistence.outcome"] == "ok"
       assert attributes["statifier_persistence.status"] == "active"
@@ -168,9 +168,9 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     test "the durable macrostep span nests inside it" do
       step_ref = make_ref()
 
-      emit_step_start("run-2", step_ref)
+      emit_step_start("exec-2", step_ref)
       emit_macrostep("session-p1", make_ref())
-      emit_step_stop("run-2", step_ref)
+      emit_step_stop("exec-2", step_ref)
 
       assert_receive {:span, macrostep}
       assert_receive {:span, step}
@@ -185,7 +185,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     test "an adapter call becomes a span inside it, back-dated by its duration" do
       step_ref = make_ref()
 
-      emit_step_start("run-3", step_ref)
+      emit_step_start("exec-3", step_ref)
 
       :telemetry.execute(
         [:statifier_persistence, :adapter, :call],
@@ -195,14 +195,14 @@ defmodule OpentelemetryStatifier.PersistenceTest do
           callback: :fetch_position,
           outcome: :ok,
           reason: nil,
-          run_id: "run-3",
+          execution_id: "exec-3",
           session_id: "session-p1",
           content_hash: "abc123"
         }
       )
 
       assert_receive {:span, adapter_call}
-      emit_step_stop("run-3", step_ref)
+      emit_step_stop("exec-3", step_ref)
       assert_receive {:span, step}
 
       assert span(adapter_call, :name) == "statifier_persistence.adapter.call"
@@ -221,13 +221,13 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     test "the lifecycle events land as span events on it" do
       step_ref = make_ref()
 
-      emit_step_start("run-4", step_ref)
+      emit_step_start("exec-4", step_ref)
 
       :telemetry.execute(
         [:statifier_persistence, :identity, :refused],
         %{system_time: System.system_time()},
         %{
-          run_id: "run-4",
+          execution_id: "exec-4",
           session_id: "session-p1",
           stage: :position,
           reason: :identity_mismatch,
@@ -236,7 +236,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
         }
       )
 
-      emit_step_stop("run-4", step_ref)
+      emit_step_stop("exec-4", step_ref)
 
       assert_receive {:span, step}
 
@@ -251,10 +251,10 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     # a miss -> red (a run created outside any step is lost entirely)
     test "a point event with no step span open becomes its own span" do
       :telemetry.execute(
-        [:statifier_persistence, :run, :created],
+        [:statifier_persistence, :execution, :created],
         %{system_time: System.system_time()},
         %{
-          run_id: "run-5",
+          execution_id: "exec-5",
           session_id: "session-p1",
           content_hash: "abc123",
           child?: false,
@@ -263,7 +263,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       )
 
       assert_receive {:span, created}
-      assert span(created, :name) == "statifier_persistence.run.created"
+      assert span(created, :name) == "statifier_persistence.execution.created"
       assert span(created, :parent_span_id) == :undefined
 
       attributes = SpanCapture.attributes(span(created, :attributes))
@@ -280,7 +280,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
 
       pid =
         spawn(fn ->
-          emit_step_start("run-6", make_ref())
+          emit_step_start("exec-6", make_ref())
           send(parent, :emitted)
         end)
 
@@ -291,7 +291,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       :ok = SpanTable.sweep(table)
 
       assert_receive {:span, orphan}
-      assert span(orphan, :name) == "statifier_persistence.run.step"
+      assert span(orphan, :name) == "statifier_persistence.execution.step"
       assert {:status, :error, _message} = span(orphan, :status)
     end
 
@@ -302,13 +302,15 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     # instead of being dropped)
     test "a malformed event drops rather than raising" do
       :telemetry.execute(
-        [:statifier_persistence, :run, :step, :start],
+        [:statifier_persistence, :execution, :step, :start],
         %{},
-        %{run_id: "run-7"}
+        %{execution_id: "exec-7"}
       )
 
       refute_receive {:span, _span}, 50
-      assert [_handler] = :telemetry.list_handlers([:statifier_persistence, :run, :step, :start])
+
+      assert [_handler] =
+               :telemetry.list_handlers([:statifier_persistence, :execution, :step, :start])
     end
   end
 end

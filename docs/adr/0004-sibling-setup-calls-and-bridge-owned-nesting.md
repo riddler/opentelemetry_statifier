@@ -243,3 +243,31 @@ list: a host wanting its declared span to receive span events as well as
 parenthood (decision 6 would need a home for a span the bridge does not
 own), or a driver wanting to declare a parent for a session it steps
 from many processes at once, which the pid key cannot express.
+
+## Note, 2026-09-12 (ots-ulw): the sibling's durable noun is now `execution`
+
+`statifier_persistence` retired `run` as the noun naming the durable
+record (its `docs/adr/0011-execution-is-the-durable-noun.md`, at proposed
+on that repo's `main`, landed in code by its PR #95 at
+`05993b09a6038bdb4549fb115a3661f06270c53f`). The event family this record
+cites moved with it, with no dual emit: the names this record spells
+`[:statifier_persistence, :run, :step, :start | :stop]` and
+`[..., :run, :lock]` are today
+`[:statifier_persistence, :execution, :step, :start | :stop]` and
+`[..., :execution, :lock]`, and the span this record calls
+`statifier_persistence.run.step` is `statifier_persistence.execution.step`.
+The `run_id`-shaped metadata keys are `execution_id`,
+`parent_execution_id` and `child_execution_id`.
+
+Nothing this record *decided* changes. Decision 3 (no runtime dependency
+on a sibling, the literal attach list checked by a test-only dep) and
+decision 4 (nesting runs through the bridge's own span table, keyed by
+`span_ref` and tagged with the emitting pid) hold verbatim - the segment
+that moved is a name, and the mechanism is indifferent to it. This note
+exists so a reader of the decision text above is not sent looking for an
+event name nothing emits; the lines above are left as written, which is
+what they were when they were decided.
+
+Read at `opentelemetry_statifier` `555f9a8` (this file) and
+`statifier_persistence` `05993b09a6038bdb4549fb115a3661f06270c53f`
+(`lib/statifier_persistence/telemetry.ex`, `@events`).

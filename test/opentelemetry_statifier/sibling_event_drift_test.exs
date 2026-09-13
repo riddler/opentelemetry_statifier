@@ -27,10 +27,22 @@ defmodule OpentelemetryStatifier.SiblingEventDriftTest do
                Enum.sort(StatifierPersistence.Telemetry.events())
     end
 
-    # sabotage: a fourteenth name deleted from Persistence's @events -> red
-    test "the bridged list carries the contract's 14 names" do
-      assert length(Persistence.events()) == 14
-      assert length(StatifierPersistence.Telemetry.events()) == 14
+    # sabotage: a sixteenth name deleted from Persistence's @events -> red
+    test "the bridged list carries the contract's 16 names" do
+      assert length(Persistence.events()) == 16
+      assert length(StatifierPersistence.Telemetry.events()) == 16
+    end
+
+    # The retired durable noun. sp-ADR-0011 moved this family to the
+    # `:execution` prefix with no dual emit, so a `:run` segment left in
+    # the attach list is a handler bound to a name nothing emits - silent
+    # data loss rather than a red gate, which is exactly what the list
+    # comparison above cannot see once both sides agree on the wrong name.
+    #
+    # sabotage: `[:statifier_persistence, :execution, :lock]` put back as
+    # `[:statifier_persistence, :run, :lock]` -> red
+    test "no subscription carries the retired :run segment" do
+      assert Enum.all?(Persistence.events(), &(:run not in &1))
     end
   end
 

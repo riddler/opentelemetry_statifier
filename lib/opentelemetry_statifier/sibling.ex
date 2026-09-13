@@ -14,7 +14,7 @@ defmodule OpentelemetryStatifier.Sibling do
       Oban already owns every interval it could bracket.
     * **An interval span**, for a point-in-time event that nonetheless
       carries a `duration` measurement (`[:statifier_persistence,
-      :adapter, :call]` and `[..., :run, :lock]`). Its start is
+      :adapter, :call]` and `[..., :execution, :lock]`). Its start is
       back-calculated as `now - duration`, the contrib family's usual
       shape, because the event reports an interval that has already
       closed.
@@ -62,7 +62,7 @@ defmodule OpentelemetryStatifier.Sibling do
   open span wins, and a list every member of which misses misses exactly
   as a single host would. It is what a sibling family whose correlation
   key is not always a session id needs. `statifier_oban`'s `scope` is the
-  session id under the family's own stepper and a host's durable run id
+  session id under the family's own stepper and a host's durable execution id
   under a durable driver, so its scheduling seam asks for the session
   first and for the calling process second - the durable driver's step
   span is open right there, and the pid check the session shape carries

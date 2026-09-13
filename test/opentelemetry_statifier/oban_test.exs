@@ -79,20 +79,20 @@ defmodule OpentelemetryStatifier.ObanTest do
     )
   end
 
-  defp emit_step_start(run_id, span_ref) do
+  defp emit_step_start(execution_id, span_ref) do
     :telemetry.execute(
-      [:statifier_persistence, :run, :step, :start],
+      [:statifier_persistence, :execution, :step, :start],
       %{system_time: System.system_time(), monotonic_time: System.monotonic_time()},
-      %{run_id: run_id, entry: :step, span_ref: span_ref}
+      %{execution_id: execution_id, entry: :step, span_ref: span_ref}
     )
   end
 
-  defp emit_step_stop(run_id, span_ref) do
+  defp emit_step_stop(execution_id, span_ref) do
     :telemetry.execute(
-      [:statifier_persistence, :run, :step, :stop],
+      [:statifier_persistence, :execution, :step, :stop],
       %{duration: 4242, monotonic_time: System.monotonic_time()},
       %{
-        run_id: run_id,
+        execution_id: execution_id,
         session_id: "session-o6",
         content_hash: "abc123",
         entry: :step,
@@ -282,26 +282,28 @@ defmodule OpentelemetryStatifier.ObanTest do
     # sabotage: the scheduling clause hosts on {:session, scope} alone,
     # without the {:process, self()} fallback -> red (the point roots its
     # own trace instead of landing on the durable driver's step span)
-    test "falls back to the step span open here when scope is a durable run id", %{table: table} do
+    test "falls back to the step span open here when scope is a durable execution id", %{
+      table: table
+    } do
       :ok = Persistence.setup(table: table)
       on_exit(&Persistence.teardown/0)
 
       span_ref = make_ref()
 
-      # No session is registered under "run-o6": under a durable driver
+      # No session is registered under "exec-o6": under a durable driver
       # `scope` is the host's run id, so the session lookup misses and
       # the step span open in this process is what the point belongs on.
-      emit_step_start("run-o6", span_ref)
-      emit_invoke_cancelled("run-o6")
-      emit_step_stop("run-o6", span_ref)
+      emit_step_start("exec-o6", span_ref)
+      emit_invoke_cancelled("exec-o6")
+      emit_step_stop("exec-o6", span_ref)
 
-      assert :error = SpanTable.fetch_session_pid(table, "run-o6")
+      assert :error = SpanTable.fetch_session_pid(table, "exec-o6")
 
       assert_receive {:span, step}
-      assert span(step, :name) == "statifier_persistence.run.step"
+      assert span(step, :name) == "statifier_persistence.execution.step"
 
       assert [{"statifier_oban.invoke.cancelled", attributes}] = span_events(step)
-      assert attributes["statifier.session_id"] == "run-o6"
+      assert attributes["statifier.session_id"] == "exec-o6"
       assert attributes["statifier_oban.count"] == 0
       assert attributes["statifier_oban.invoke_id"] == "i1"
     end
@@ -445,15 +447,15 @@ defmodule OpentelemetryStatifier.ObanTest do
 
       span_ref = make_ref()
 
-      emit_step_start("run-f3", span_ref)
-      emit_unstarted_cancelled("run-f3", 2)
-      emit_step_stop("run-f3", span_ref)
+      emit_step_start("exec-f3", span_ref)
+      emit_unstarted_cancelled("exec-f3", 2)
+      emit_step_stop("exec-f3", span_ref)
 
       assert_receive {:span, step}
-      assert span(step, :name) == "statifier_persistence.run.step"
+      assert span(step, :name) == "statifier_persistence.execution.step"
 
       assert [{"statifier_oban.invoke.unstarted_cancelled", attributes}] = span_events(step)
-      assert attributes["statifier.session_id"] == "run-f3"
+      assert attributes["statifier.session_id"] == "exec-f3"
       assert attributes["statifier_oban.count"] == 2
       assert attributes["statifier_oban.invoke_id"] == "i-fan"
     end

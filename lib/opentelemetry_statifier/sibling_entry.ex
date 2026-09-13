@@ -3,14 +3,14 @@ defmodule OpentelemetryStatifier.SiblingEntry do
   An open *sibling* span row held in `OpentelemetryStatifier.SpanTable`
   between a sibling package's `:start` event and the `:stop` whose
   `span_ref` matches - today only
-  `[:statifier_persistence, :run, :step, :start | :stop]`, the one
+  `[:statifier_persistence, :execution, :step, :start | :stop]`, the one
   start/stop pair the sibling contracts define (sp-ADR-0009's step seam;
   `sob-ADR-0006` deliberately has no pairs).
 
   It is a separate row shape from `OpentelemetryStatifier.SpanEntry`
   because a sibling span is scoped to a *process*, not to a logical
   session: the step seam brackets one serialized drive on the calling
-  process and knows a `run_id`, while `session_id` is `nil` until a
+  process and knows an `execution_id`, while `session_id` is `nil` until a
   position has been decoded. `pid` therefore rides in element 2 of the
   row (where the macrostep rows carry `session_id`), which is what lets
   the sweep find every sibling row for a dead process with one
@@ -23,7 +23,7 @@ defmodule OpentelemetryStatifier.SiblingEntry do
   reading or writing the process's ambient context
   (`docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md`).
 
-  `started_at` orders a process's open sibling spans: a parent run
+  `started_at` orders a process's open sibling spans: a parent execution
   creating a durable child inside its own step opens a second step span
   on the same process, and the innermost one is the parent of what
   follows.

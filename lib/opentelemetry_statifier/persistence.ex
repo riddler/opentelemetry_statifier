@@ -17,13 +17,13 @@ defmodule OpentelemetryStatifier.Persistence do
 
   ## What it produces
 
-  `[:statifier_persistence, :run, :step, :start]` / `[..., :stop]` is the
-  one paired seam the sibling contracts define, and it becomes a
-  `statifier_persistence.run.step` span - the interval the durable
+  `[:statifier_persistence, :execution, :step, :start]` / `[..., :stop]` is
+  the one paired seam the sibling contracts define, and it becomes a
+  `statifier_persistence.execution.step` span - the interval the durable
   stepper owns and nothing else measures: lock, load, decode,
   identity-check, advance, execute effects, persist. **The macrostep span
   for the step nests inside it**, as do the `statifier_persistence.adapter.call`
-  and `statifier_persistence.run.lock` spans, so a durable run reads as
+  and `statifier_persistence.execution.lock` spans, so a durable execution reads as
   one tree rather than as two unrelated families. The nesting runs
   through this bridge's own span table, not the process's ambient OTel
   context (`docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md`).
@@ -42,7 +42,7 @@ defmodule OpentelemetryStatifier.Persistence do
 
   ## The event list
 
-  The 14 names below are literal here rather than read from
+  The 16 names below are literal here rather than read from
   `StatifierPersistence.Telemetry.events/0`, because this package takes
   no dependency on its siblings: a bridge that made `statifier_persistence`
   (and through it Ecto, and a database driver) a dependency of every host
@@ -62,19 +62,21 @@ defmodule OpentelemetryStatifier.Persistence do
   alias OpentelemetryStatifier.Persistence.Handler
 
   @events [
-    [:statifier_persistence, :run, :step, :start],
-    [:statifier_persistence, :run, :step, :stop],
-    [:statifier_persistence, :run, :lock],
+    [:statifier_persistence, :execution, :step, :start],
+    [:statifier_persistence, :execution, :step, :stop],
+    [:statifier_persistence, :execution, :lock],
     [:statifier_persistence, :adapter, :call],
     [:statifier_persistence, :identity, :refused],
-    [:statifier_persistence, :run, :created],
-    [:statifier_persistence, :run, :terminated],
-    [:statifier_persistence, :run, :discarded],
+    [:statifier_persistence, :execution, :created],
+    [:statifier_persistence, :execution, :terminated],
+    [:statifier_persistence, :execution, :discarded],
     [:statifier_persistence, :effect, :failed],
     [:statifier_persistence, :drive, :turns_exhausted],
     [:statifier_persistence, :child, :started],
     [:statifier_persistence, :child, :refused],
+    [:statifier_persistence, :child, :recorded],
     [:statifier_persistence, :child, :answered],
+    [:statifier_persistence, :child, :settled],
     [:statifier_persistence, :child, :cascade_cancelled]
   ]
 
@@ -85,7 +87,7 @@ defmodule OpentelemetryStatifier.Persistence do
   ## Examples
 
       iex> length(OpentelemetryStatifier.Persistence.events())
-      14
+      16
 
   """
   @spec events() :: [:telemetry.event_name()]

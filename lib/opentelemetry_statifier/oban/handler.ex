@@ -6,7 +6,7 @@ defmodule OpentelemetryStatifier.Oban.Handler do
   Two clauses do the whole family, because the contract has no pairs and
   only two *shapes*: a scheduling event lands on the span open in the
   emitting process - the macrostep span when the session is stepping
-  there, the durable driver's step span when a durable run id is all the
+  there, the durable driver's step span when a durable execution id is all the
   event carries - and a delivery event becomes its own span linked to
   the arming trace. The fan-out seam adds names, not a third shape:
   `:fan_out` and `:child_started` fire inside Oban jobs carrying
@@ -59,7 +59,7 @@ defmodule OpentelemetryStatifier.Oban.Handler do
   # macrostep, so the span the durable consequence of the chart's
   # decision belongs on is open right there. `scope` is looked up as the
   # session id it corresponds to first; a scope that is a host's durable
-  # run id matches no session, and the event falls back to whatever this
+  # execution id matches no session, and the event falls back to whatever this
   # bridge has open in the emitting process - the durable driver's step
   # span. Only when neither is open does it become its own span.
   def handle_event(
