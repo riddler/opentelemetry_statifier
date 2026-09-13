@@ -291,7 +291,7 @@ defmodule OpentelemetryStatifier.ObanTest do
       span_ref = make_ref()
 
       # No session is registered under "exec-o6": under a durable driver
-      # `scope` is the host's run id, so the session lookup misses and
+      # `scope` is the host's execution id, so the session lookup misses and
       # the step span open in this process is what the point belongs on.
       emit_step_start("exec-o6", span_ref)
       emit_invoke_cancelled("exec-o6")
