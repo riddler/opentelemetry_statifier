@@ -24,11 +24,10 @@ defect.
 reference stops being the most recent the moment the next release lands: the
 sentence that used to sit here named the 0.3.0 prep, and by the time anyone
 read it again four later preps had landed behind its back (`ots-txv`). The
-SHAs that remain below are
-historical claims - "this happened once, in that commit" - and a historical
-claim does not go stale. Nothing here needs editing at a release, and a
-release commit does not touch this file; the table at the end lists every
-file it does touch, and this is not one of them.
+SHAs that remain below are historical claims - "this happened once, in that
+commit" - and a historical claim does not go stale. Nothing here needs editing
+at a release, and a release commit does not touch this file; the table at the
+end lists every file it does touch, and this is not one of them.
 
 ## Why the recipe names no changelog
 
@@ -130,7 +129,9 @@ Three things about this pin that a release here has to know:
   back to the patch-dropped shape the skill's own step 2 assumes. The two
   forms admit the same patch releases (`~> 0.6.0` and `~> 0.6` both admit
   `0.6.1`), so nothing about the rule below changes with the form - only the
-  string written.
+  string written. What differs is the minor bound, and that is what the `.0`
+  is for: `~> X.Y` also admits `X.(Y+1).0` and every later minor below
+  `(X+1).0.0`, while `~> X.Y.0` stops short of `X.(Y+1).0`.
 - **The rule: a prep moves the pin to the minor being released.** A major or
   minor prep rewrites `~> X.Y.0` to the version it is cutting, again with the
   `.0`; a patch prep leaves it alone, because `~> X.Y.0` already admits the
