@@ -157,7 +157,7 @@ Each family's attributes live in its own namespace
 `statifier.session_id` so one attribute joins a step, a timer and a
 macrostep. Each setup has its own `teardown/0` and is independent of the
 others. The mechanism is recorded in
-[ADR-0004](docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md);
+[ADR-0004](https://github.com/riddler/opentelemetry_statifier/blob/v0.6.0/docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md);
 the event contracts themselves are frozen upstream, in
 `statifier_persistence`'s ADR-0009 and `statifier_oban`'s ADR-0006.
 
@@ -215,7 +215,7 @@ ending your span.
 Hosts that never call any of this see no change at all: with no
 declaration, every span is exactly what it was. The mechanism is
 recorded in
-[ADR-0004](docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md),
+[ADR-0004](https://github.com/riddler/opentelemetry_statifier/blob/v0.6.0/docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md),
 in the 2026-09-02 note that generalizes its decision 4.
 
 ### Correlating with a `statifier_ui` trace stream
