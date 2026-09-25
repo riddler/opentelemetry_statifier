@@ -78,8 +78,10 @@ value without moving its reason is incomplete regardless of who asked.
 ## Gate attestation: `mix quality.verify`, provided by ex_quality
 
 The manifest wires `gate.attest` to `mix quality.verify`. The task ships in
-`ex_quality` (`~> 0.14`, dev-only, locked at `0.14.0`), so this repo carries
-no local copy of it, on purpose, per the family ruling in st-hcgl. It adds no
+`ex_quality` (dev-only; `mix.exs` holds its constraint and `mix.lock` its
+version, and this file quotes neither, as with the version above), so this
+repo carries no local copy of it, on purpose, per the family ruling in
+st-hcgl. It adds no
 gate stage and modifies nothing in `.quality.exs`; it runs the gate with a
 machine-readable report and attests only a full run (status ok, scope all, no
 profile, no run-narrowing skip). An unattended (`/wurk:commit --auto`) run
