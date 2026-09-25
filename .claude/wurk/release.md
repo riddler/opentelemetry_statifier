@@ -85,7 +85,7 @@ resolves, not a SHA written down here.
    from a campaign journal, which is written in UTC. The two differ for part
    of every day, and a section dated a day ahead of the commit that wrote it
    reads as a backdated release. Take the date from `date +%F` at the moment
-   you write the heading (fleet ruling RQ-033-15, 2026-09-06). Sections
+   you write the heading (ruled by the operator, 2026-09-06). Sections
    already shipped are left as they stand: rewriting one to match a
    convention adopted after it was written loses the record of what the
    published section said.
