@@ -22,13 +22,16 @@ defmodule OpentelemetryStatifier.Oban.Handler do
 
   @mapping Sibling.mapping("statifier_oban", :scope)
 
-  # The kinds that fire inside an Oban job and carry `caller_context`.
+  # The kinds that fire inside an Oban job. `:delivered` and `:deferred`
+  # carry no `caller_context` and are delivery-shaped all the same: the
+  # invoke job emits them, so each is its own root, unlinked, correlated
+  # by `statifier.session_id`.
   # `:fan_out` and `:child_started` are the fan-out seam's two: the
   # invocation's dispatch and one per chunk child, each a root linked to
   # the trace that planned it. `:unstarted_cancelled` is deliberately
   # absent - it has no `caller_context` to link with and it is emitted
   # synchronously by the sweep, so it belongs on the span open there.
-  @delivery [:fired, :discarded, :delivered, :failed, :fan_out, :child_started]
+  @delivery [:fired, :discarded, :delivered, :failed, :deferred, :fan_out, :child_started]
 
   @spec handle_event(:telemetry.event_name(), map(), map(), Config.t()) :: :ok
 

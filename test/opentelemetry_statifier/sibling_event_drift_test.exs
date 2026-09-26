@@ -73,10 +73,24 @@ defmodule OpentelemetryStatifier.SiblingEventDriftTest do
       assert Enum.sort(Oban.events()) == Enum.sort(StatifierOban.Telemetry.events())
     end
 
-    # sabotage: a fourteenth name deleted from Oban's @events -> red
-    test "the bridged list carries the contract's 14 names" do
-      assert length(Oban.events()) == 14
-      assert length(StatifierOban.Telemetry.events()) == 14
+    # sabotage: `[:statifier_oban, :invoke, :deferred]` deleted from Oban's
+    # @events -> red
+    test "the bridged list carries the contract's 15 names" do
+      assert length(Oban.events()) == 15
+      assert length(StatifierOban.Telemetry.events()) == 15
+    end
+
+    # The same pin the persistence describe carries, for the same reason:
+    # the list this package bridges is 0.15's, the first release to emit
+    # `[:statifier_oban, :invoke, :deferred]`, and a lock walked back to
+    # 0.14 would pass the comparisons above against a shorter contract.
+    #
+    # sabotage: mix.lock walked back to statifier_oban 0.14.0 -> red
+    test "the comparison runs against statifier_oban 0.15" do
+      :ok = ensure_loaded(:statifier_oban)
+      vsn = :statifier_oban |> Application.spec(:vsn) |> to_string()
+
+      assert Version.match?(vsn, "~> 0.15")
     end
 
     # sabotage: `[:statifier_oban, :invoke, :child_started]` deleted from
