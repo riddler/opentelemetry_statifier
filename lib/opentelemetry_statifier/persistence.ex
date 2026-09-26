@@ -34,8 +34,20 @@ defmodule OpentelemetryStatifier.Persistence do
   `statifier_persistence` narrows `reason` to an atom before it emits, so
   the message is bounded. `kind` and `reason` also ride as attributes;
   `stacktrace` does not - it is a list, and the attribute rules drop a
-  list (`OpentelemetryStatifier.Attributes`), so the frames stay with the
-  caller, which re-raises with the original stacktrace.
+  list (`OpentelemetryStatifier.Attributes`).
+
+  The close also records a span event named `exception` on the step
+  span, the OpenTelemetry exception semantic convention's shape, so a
+  tracing backend's own exception view shows the failure. It carries
+  `exception.type` - the exception's module for an `:error`
+  (`"Elixir.RuntimeError"`), and `"<kind>:<reason>"` for a `:throw` or an
+  `:exit` (`"exit:redacted"`) - and `exception.stacktrace`, the frames
+  `statifier_persistence` narrowed before it emitted (module, function,
+  arity, file and line, no arguments), formatted one per line as
+  `Exception.format_stacktrace/1` lays them out. There is no
+  `exception.message`: the narrowed event carries no message. The
+  original reason and stacktrace stay with the caller, which re-raises
+  with them. A step that closes with `:stop` records no such event.
 
   `[..., :step, :stop]`'s `selection` (`:selected`, `:none`, or `nil` on a
   stop that delivered no event) rides as the
