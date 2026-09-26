@@ -10,6 +10,22 @@ fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.7.0] 2026-09-26
+
+Minor release: the persistence bridge covers the four events
+`statifier_persistence` 0.19 added, so
+`OpentelemetryStatifier.Persistence.events/0` names four more.
+
+### Added
+
+- `OpentelemetryStatifier.Persistence` bridges the four events
+  `statifier_persistence` 0.19 emits that it did not: a step that raised,
+  threw or exited closes its `statifier_persistence.execution.step` span
+  with an error status, an `error.communication` re-entry lands as a
+  `statifier_persistence.execution.step.reentered` span event on the step
+  span, and an execution migrated or unparked becomes a point like the
+  other lifecycle events.
+
 ## [0.6.0] 2026-09-13
 
 Minor release: the bridge follows `statifier_persistence`'s execution rename.
