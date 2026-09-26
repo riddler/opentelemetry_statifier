@@ -158,6 +158,30 @@ defmodule OpentelemetryStatifier.ObanTest do
     )
   end
 
+  # Through statifier_oban's own emitter rather than a hand-built
+  # payload, so the measurements and metadata this test reads are the
+  # published contract's and not a copy of it.
+  defp emit_deferred(scope) do
+    invoke = %Statifier.Effect.Invoke{
+      invoke_id: "i-deferred",
+      state_index: 0,
+      invoke_index: 0,
+      macrostep: 3,
+      microstep: 0,
+      round: 0
+    }
+
+    job = %Elixir.Oban.Job{id: 901, attempt: 2}
+
+    StatifierOban.Telemetry.invoke_deferred(
+      scope,
+      StatifierOban.Invoke.Handler,
+      invoke,
+      StatifierOban.Invoke.Delivery.Session,
+      job
+    )
+  end
+
   defp span_events(captured) do
     captured
     |> span(:events)
@@ -178,7 +202,7 @@ defmodule OpentelemetryStatifier.ObanTest do
     # sabotage: setup/1 attaches with :telemetry.attach_many/4 under one
     # shared id -> red (the per-event ids the assertion reads are absent)
     test "attaches one handler id per event name, ADR-0003 decision 2's discipline" do
-      assert length(Oban.events()) == 14
+      assert length(Oban.events()) == 15
 
       for event <- Oban.events() do
         assert [handler] = :telemetry.list_handlers(event)
@@ -373,6 +397,51 @@ defmodule OpentelemetryStatifier.ObanTest do
       emit_fired("session-o5", %{"host" => "term the bridge cannot read"})
       assert_receive {:span, opaque}
       assert span_links(opaque) == []
+    end
+  end
+
+  describe "a deferred invocation" do
+    # sabotage: `[:statifier_oban, :invoke, :deferred]` deleted from Oban's
+    # @events -> red (nothing is attached, so no span arrives)
+    test "becomes its own span, unlinked, carrying the delivered keys" do
+      emit_deferred("session-o7")
+
+      assert_receive {:span, deferred}
+      assert span(deferred, :name) == "statifier_oban.invoke.deferred"
+      assert span(deferred, :parent_span_id) == :undefined
+      assert span_links(deferred) == []
+
+      attributes = SpanCapture.attributes(span(deferred, :attributes))
+
+      assert attributes["statifier.session_id"] == "session-o7"
+      assert attributes["statifier_oban.invoke_id"] == "i-deferred"
+      assert attributes["statifier_oban.macrostep"] == 3
+      assert attributes["statifier_oban.attempt"] == 2
+      assert attributes["statifier_oban.job_id"] == 901
+      assert attributes["statifier_oban.handler"] == "Elixir.StatifierOban.Invoke.Handler"
+
+      assert attributes["statifier_oban.delivery"] ==
+               "Elixir.StatifierOban.Invoke.Delivery.Session"
+    end
+
+    # sabotage: `:deferred` deleted from the handler's @delivery -> red
+    # (the event takes the scheduling shape and lands as a span event on
+    # the macrostep span open in this process instead of its own span)
+    test "is delivery-shaped: a root even when a macrostep span is open here" do
+      span_ref = make_ref()
+
+      emit_macrostep_start("session-o8", span_ref)
+      emit_deferred("session-o8")
+      emit_macrostep_stop("session-o8", span_ref)
+
+      assert_receive {:span, first}
+      assert_receive {:span, second}
+
+      {[deferred], [macrostep]} =
+        Enum.split_with([first, second], &(span(&1, :name) == "statifier_oban.invoke.deferred"))
+
+      assert span(deferred, :parent_span_id) == :undefined
+      assert span_events(macrostep) == []
     end
   end
 

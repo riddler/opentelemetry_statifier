@@ -12,7 +12,7 @@ defmodule OpentelemetryStatifier.Oban do
       OpentelemetryStatifier.setup()
       OpentelemetryStatifier.Oban.setup()
 
-  This module bridges `statifier_oban`'s fourteen events and nothing else.
+  This module bridges `statifier_oban`'s fifteen events and nothing else.
   Oban's own `[:oban, :job, ...]` spans are `opentelemetry_oban`'s to
   produce, and a host wanting both attaches both - the reason
   `statifier_oban` deliberately emits no duration, no attempt timing and
@@ -32,13 +32,20 @@ defmodule OpentelemetryStatifier.Oban do
       these become span events on it: the chart's decision and its
       durable consequence in one span.
     * **The delivery seam** (`:fired`, the two `:discarded`,
-      `:delivered`, `:failed`) fires inside an Oban job, days later and
-      usually on another node. Those become their own spans, **linked**
-      to the trace that armed the timer through `caller_context` when the
-      host stamped a W3C `traceparent` there. A link and never a parent:
-      parenthood would hold the arming trace open for the length of the
-      delay. With no `caller_context`, the span is simply unlinked - the
-      ordinary detached case, correlated by `statifier.session_id`.
+      `:delivered`, `:failed`, `:deferred`) fires inside an Oban job, days
+      later and usually on another node. Those become their own spans,
+      **linked** to the trace that armed the timer through
+      `caller_context` when the host stamped a W3C `traceparent` there. A
+      link and never a parent: parenthood would hold the arming trace
+      open for the length of the delay. With no `caller_context`, the span
+      is simply unlinked - the ordinary detached case, correlated by
+      `statifier.session_id`. `:deferred` is the one delivery-seam event
+      that is not a verdict: the handler handed the work on, the job
+      completed without delivering, and the invocation stays open. It
+      carries `:delivered`'s keys and no `caller_context`, so it becomes
+      an unlinked span like `:delivered`, and it is the last span this
+      bridge produces for that invocation - the eventual answer arrives
+      through the host's delivery module, which emits nothing here.
     * **The fan-out seam** (`:fan_out`, `:child_started`,
       `:unstarted_cancelled`) splits across the two shapes above rather
       than adding a third. `:fan_out` and `:child_started` fire inside
@@ -74,7 +81,7 @@ defmodule OpentelemetryStatifier.Oban do
 
   ## The event list
 
-  The 14 names below are literal here rather than read from
+  The 15 names below are literal here rather than read from
   `StatifierOban.Telemetry.events/0`, for the reason
   `OpentelemetryStatifier.Persistence`'s moduledoc gives: bridging a
   sibling must not make that sibling - and Oban, and a database - a
@@ -101,6 +108,7 @@ defmodule OpentelemetryStatifier.Oban do
     [:statifier_oban, :invoke, :delivered],
     [:statifier_oban, :invoke, :discarded],
     [:statifier_oban, :invoke, :failed],
+    [:statifier_oban, :invoke, :deferred],
     [:statifier_oban, :invoke, :fan_out],
     [:statifier_oban, :invoke, :child_started],
     [:statifier_oban, :invoke, :unstarted_cancelled]
@@ -113,7 +121,7 @@ defmodule OpentelemetryStatifier.Oban do
   ## Examples
 
       iex> length(OpentelemetryStatifier.Oban.events())
-      14
+      15
 
   """
   @spec events() :: [:telemetry.event_name()]

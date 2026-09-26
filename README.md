@@ -134,7 +134,7 @@ the child-execution seam - land as span events on the step span, and a
 drive that raised, threw or exited closes the step span with an error
 status.
 
-`OpentelemetryStatifier.Oban` bridges the durable seams' fourteen
+`OpentelemetryStatifier.Oban` bridges the durable seams' fifteen
 `[:statifier_oban, ...]` events. Scheduling events fire on the process
 that drove the macrostep, so they land as span events on that macrostep
 span: the chart's decision and its durable consequence in one span,
@@ -144,7 +144,11 @@ later and usually on another node, so each becomes its own span - linked
 to the trace that armed the timer when your host stamped a W3C
 `traceparent` into `caller_context`, and simply unlinked when it did not.
 A link and never a parent: parenting a fire to the request that armed it
-would hold that trace open for the length of the delay. The fan-out
+would hold that trace open for the length of the delay. A deferred
+invocation - the handler handed the work on and the job completed
+without answering - is one of those delivery spans, `invoke.deferred`,
+and the last one for that invocation: its eventual answer arrives
+through your delivery module, not through an Oban job. The fan-out
 seam splits between the two: `invoke.fan_out` and `invoke.child_started`
 fire inside Oban jobs and become roots linked to the trace that planned
 the invocation, so every chunk child is reachable from the parent's
