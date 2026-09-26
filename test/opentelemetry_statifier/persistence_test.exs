@@ -297,8 +297,9 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       assert_receive {:span, step}
       assert span(step, :name) == "statifier_persistence.execution.step"
 
-      # sabotage: close_span/5 ignores its status argument -> red (the
-      # span closes unset, and a failed drive reads as a clean one)
+      # sabotage: the set_status call is deleted from the step-exception
+      # clause -> red (the span closes unset, and a failed drive reads as
+      # a clean one)
       assert {:status, :error, message} = span(step, :status)
       assert message == "error: RuntimeError"
 
@@ -307,6 +308,100 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       assert attributes["statifier_persistence.reason"] == "Elixir.RuntimeError"
       assert attributes["statifier_persistence.duration"] == 777
       refute Map.has_key?(attributes, "statifier_persistence.stacktrace")
+    end
+
+    # sabotage: the add_event call is deleted from the step-exception
+    # clause -> red (the step span closes with an error status and no
+    # span event, and a backend's exception view shows nothing)
+    test "a step exception records an exception span event on the step span" do
+      span_ref = make_ref()
+
+      emit_step_start("exec-8e", span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :exception],
+        %{duration: 777, monotonic_time: System.monotonic_time()},
+        %{
+          execution_id: "exec-8e",
+          entry: :step,
+          span_ref: span_ref,
+          kind: :error,
+          reason: RuntimeError,
+          stacktrace: [
+            {Some.Executor, :run, 2, [file: ~c"lib/some.ex", line: 7]},
+            {Some.Builder, :build, 1, []}
+          ]
+        }
+      )
+
+      assert_receive {:span, step}
+      assert span(step, :name) == "statifier_persistence.execution.step"
+
+      assert [{"exception", attributes}] = span_events(step)
+      assert attributes["exception.type"] == "Elixir.RuntimeError"
+
+      # sabotage: format_stacktrace/1 joins the frames with inspect/1
+      # instead of formatting each entry -> red (the event carries the
+      # raw tuples, not the frames a backend's exception view reads)
+      assert attributes["exception.stacktrace"] ==
+               "    lib/some.ex:7: Some.Executor.run/2\n    Some.Builder.build/1\n"
+
+      assert map_size(attributes) == 2
+    end
+
+    # sabotage: format_frame/1's inspect/1 fallback clause is deleted ->
+    # red (a `:redacted` frame raises inside the handler, :telemetry
+    # detaches it, and the step span is never closed or exported)
+    test "a throw's exception event renders its kind and survives a redacted frame" do
+      span_ref = make_ref()
+
+      emit_step_start("exec-8t", span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :exception],
+        %{duration: 1, monotonic_time: System.monotonic_time()},
+        %{
+          execution_id: "exec-8t",
+          entry: :step,
+          span_ref: span_ref,
+          kind: :throw,
+          reason: :redacted,
+          stacktrace: [:redacted, {Some.Executor, :run, 2, [file: ~c"lib/some.ex", line: 7]}]
+        }
+      )
+
+      assert_receive {:span, step}
+      assert [{"exception", attributes}] = span_events(step)
+      assert attributes["exception.type"] == "throw:redacted"
+
+      assert attributes["exception.stacktrace"] ==
+               "    :redacted\n    lib/some.ex:7: Some.Executor.run/2\n"
+
+      assert [_handler] =
+               :telemetry.list_handlers([:statifier_persistence, :execution, :step, :exception])
+    end
+
+    # sabotage: exception_event_attributes/1 always puts
+    # "exception.stacktrace", formatting a missing stacktrace as "" -> red
+    # (an event with no frames claims an empty trace instead of omitting it)
+    test "an exit with no frames records the event without a stacktrace" do
+      span_ref = make_ref()
+
+      emit_step_start("exec-8x", span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :exception],
+        %{duration: 1, monotonic_time: System.monotonic_time()},
+        %{execution_id: "exec-8x", entry: :step, span_ref: span_ref, kind: :exit, reason: :normal}
+      )
+
+      assert_receive {:span, step}
+      assert {:status, :error, "exit: normal"} = span(step, :status)
+
+      assert [{"exception", %{"exception.type" => "exit:normal"} = attributes}] =
+               span_events(step)
+
+      refute Map.has_key?(attributes, "exception.stacktrace")
     end
 
     # sabotage: the step-exception clause closes the process's innermost
@@ -330,6 +425,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
 
       assert_receive {:span, step}
       assert span(step, :status) == :undefined
+      assert span_events(step) == []
     end
 
     # sabotage: the reentered clause is deleted from the Handler -> red

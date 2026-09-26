@@ -93,8 +93,7 @@ defmodule OpentelemetryStatifier.Sibling do
 
   @doc """
   Closes the paired span under `span_ref`, setting `attributes` first,
-  and `status` when one is given - the error status a sibling's
-  `:exception` close carries. A `span_ref` with no open span is
+  and `status` when one is given. A `span_ref` with no open span is
   contract-legal (the sweep ends the orphans a dead process leaves) and
   closes nothing.
   """

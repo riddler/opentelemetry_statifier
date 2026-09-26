@@ -28,10 +28,12 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   `:migrated`'s `dropped` render with `inspect/1` before the attribute
   rules see them, which would otherwise drop a list
   (`OpentelemetryStatifier.Persistence`'s moduledoc says why); the third,
-  `:exception`'s `stacktrace`, is left to the rules and dropped.
+  `:exception`'s `stacktrace`, is left to the rules and dropped as an
+  attribute, and travels instead as the `exception.stacktrace` of the
+  `exception` span event the close records.
   """
 
-  alias OpentelemetryStatifier.{Attributes, Config, Sibling}
+  alias OpentelemetryStatifier.{Attributes, Config, Sibling, SiblingEntry, SpanTable}
 
   @mapping Sibling.mapping("statifier_persistence", :session_id)
 
@@ -77,21 +79,33 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   # drive raised, threw or exited, pairs on the same `span_ref`, and ends
   # the span with an error status. `reason` is narrowed upstream to an
   # atom, so the status message is bounded; `stacktrace` is a list and
-  # the attribute rules drop it.
+  # the attribute rules drop it, so it travels instead in the `exception`
+  # span event recorded on the span just before it ends. The close is
+  # `Sibling.close_span/5`'s, done here because the event has to land
+  # between the take and the end.
   def handle_event(
         [:statifier_persistence, :execution, :step, :exception],
         %{monotonic_time: monotonic_time} = measurements,
         %{span_ref: span_ref} = metadata,
-        %Config{} = config
+        %Config{table: table} = config
       )
       when is_reference(span_ref) and is_integer(monotonic_time) do
-    Sibling.close_span(
-      config,
-      span_ref,
-      monotonic_time,
-      attributes(measurements, metadata, config),
-      OpenTelemetry.status(:error, exception_message(metadata))
-    )
+    case SpanTable.take_sibling_span(table, span_ref) do
+      {:ok, %SiblingEntry{span_ctx: span_ctx}} ->
+        OpenTelemetry.Span.set_attributes(span_ctx, attributes(measurements, metadata, config))
+        OpenTelemetry.Span.add_event(span_ctx, "exception", exception_event_attributes(metadata))
+
+        OpenTelemetry.Span.set_status(
+          span_ctx,
+          OpenTelemetry.status(:error, exception_message(metadata))
+        )
+
+        OpenTelemetry.Span.end_span(span_ctx, monotonic_time)
+        :ok
+
+      :error ->
+        :ok
+    end
   end
 
   # The one four-segment point. A re-entry carries no `span_ref` - it
@@ -188,6 +202,50 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   defp exception_message(metadata) do
     "#{format_term(Map.get(metadata, :kind))}: #{format_term(Map.get(metadata, :reason))}"
   end
+
+  # The OpenTelemetry exception semantic convention's two attributes, in
+  # the shape `OpenTelemetry.Span.record_exception/4` gives them. That
+  # call itself needs the exception struct, and the narrowed event
+  # carries only its module, so the attributes are built here.
+  # `exception.type` is the module for an `:error`, as `record_exception/4`
+  # renders it, and `"<kind>:<reason>"` for a `:throw` or an `:exit`, as
+  # `:otel_span.record_exception/5` renders one. `exception.stacktrace` is
+  # the narrowed frames formatted one per line; it is omitted when the
+  # event carries no list of frames.
+  @spec exception_event_attributes(map()) :: map()
+  defp exception_event_attributes(metadata) do
+    type = exception_type(Map.get(metadata, :kind), Map.get(metadata, :reason))
+
+    case format_stacktrace(Map.get(metadata, :stacktrace)) do
+      nil -> %{"exception.type" => type}
+      stacktrace -> %{"exception.type" => type, "exception.stacktrace" => stacktrace}
+    end
+  end
+
+  @spec exception_type(term(), term()) :: String.t()
+  defp exception_type(:error, reason) when is_atom(reason) and not is_nil(reason),
+    do: Atom.to_string(reason)
+
+  defp exception_type(kind, reason), do: "#{format_term(kind)}:#{format_term(reason)}"
+
+  # Every frame the narrowing keeps is `{module, function, arity,
+  # location}`; one it could not read arrives as `:redacted` and renders
+  # with `inspect/1` rather than reaching `Exception.format_stacktrace_entry/1`,
+  # which would raise on it inside a host's durable step.
+  @spec format_stacktrace(term()) :: String.t() | nil
+  defp format_stacktrace(frames) when is_list(frames) and frames != [] do
+    Enum.map_join(frames, fn frame -> "    " <> format_frame(frame) <> "\n" end)
+  end
+
+  defp format_stacktrace(_frames), do: nil
+
+  @spec format_frame(term()) :: String.t()
+  defp format_frame({module, function, arity, location} = frame)
+       when is_atom(module) and is_atom(function) and is_integer(arity) and is_list(location) do
+    Exception.format_stacktrace_entry(frame)
+  end
+
+  defp format_frame(frame), do: inspect(frame)
 
   @spec format_term(term()) :: String.t()
   defp format_term(term) when is_atom(term) and not is_nil(term) do
