@@ -120,7 +120,7 @@ compose in a host. Attach the ones you run:
 ```
 
 `OpentelemetryStatifier.Persistence` bridges the durable stepper's
-sixteen `[:statifier_persistence, ...]` events. One serialized drive -
+twenty `[:statifier_persistence, ...]` events. One serialized drive -
 lock, load, decode, identity-check, advance, execute effects, persist -
 becomes a `statifier_persistence.execution.step` span, and **the
 macrostep span for that step nests inside it**, as do the
@@ -129,8 +129,10 @@ macrostep span for that step nests inside it**, as do the
 reads as one tree: which storage call was slow, how long the execution
 waited for its own lock, and what the chart did, in one place. The
 lifecycle events - an execution created, terminated, discarded, an
-identity refusal, a failed effect, the child-execution seam - land as
-span events on the step span.
+identity refusal, a failed effect, an `error.communication` re-entry,
+the child-execution seam - land as span events on the step span, and a
+drive that raised, threw or exited closes the step span with an error
+status.
 
 `OpentelemetryStatifier.Oban` bridges the durable seams' fourteen
 `[:statifier_oban, ...]` events. Scheduling events fire on the process

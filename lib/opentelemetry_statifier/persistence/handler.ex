@@ -14,11 +14,21 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   Three shapes, decided by the contract rather than by this module
   (`statifier_persistence`'s `docs/telemetry.md`):
 
-    * the step seam is a pair, and becomes a span;
+    * the step seam is a pair, and becomes a span: `:start` opens it and
+      exactly one of `:stop` or `:exception` closes it, the latter with an
+      error status;
     * `[..., :adapter, :call]` and `[..., :execution, :lock]` are points that
       carry a `duration`, and become spans back-dated by it;
     * everything else is a point, and becomes a span event on the step
-      span open around it.
+      span open around it - `[..., :step, :reentered]` included, which
+      has four segments but no `span_ref`, and so is a point rather than
+      a half of the pair.
+
+  Of the family's three list-valued keys, `:reentered`'s `opts` and
+  `:migrated`'s `dropped` render with `inspect/1` before the attribute
+  rules see them, which would otherwise drop a list
+  (`OpentelemetryStatifier.Persistence`'s moduledoc says why); the third,
+  `:exception`'s `stacktrace`, is left to the rules and dropped.
   """
 
   alias OpentelemetryStatifier.{Attributes, Config, Sibling}
@@ -60,6 +70,47 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
       span_ref,
       monotonic_time,
       attributes(measurements, metadata, config)
+    )
+  end
+
+  # The step span's other close. `:exception` replaces `:stop` when the
+  # drive raised, threw or exited, pairs on the same `span_ref`, and ends
+  # the span with an error status. `reason` is narrowed upstream to an
+  # atom, so the status message is bounded; `stacktrace` is a list and
+  # the attribute rules drop it.
+  def handle_event(
+        [:statifier_persistence, :execution, :step, :exception],
+        %{monotonic_time: monotonic_time} = measurements,
+        %{span_ref: span_ref} = metadata,
+        %Config{} = config
+      )
+      when is_reference(span_ref) and is_integer(monotonic_time) do
+    Sibling.close_span(
+      config,
+      span_ref,
+      monotonic_time,
+      attributes(measurements, metadata, config),
+      OpenTelemetry.status(:error, exception_message(metadata))
+    )
+  end
+
+  # The one four-segment point. A re-entry carries no `span_ref` - it
+  # pairs with its step by arriving inside it, on the step's own process -
+  # so it lands on the step span open in this process, and becomes its
+  # own zero-duration span when there is none.
+  def handle_event(
+        [:statifier_persistence, :execution, :step, :reentered] = event,
+        measurements,
+        metadata,
+        %Config{} = config
+      )
+      when is_map(measurements) and is_map(metadata) do
+    Sibling.point(
+      config,
+      Sibling.name(event),
+      {:process, self()},
+      attributes(measurements, metadata, config),
+      []
     )
   end
 
@@ -112,6 +163,39 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
 
   @spec attributes(map(), map(), Config.t()) :: map()
   defp attributes(measurements, metadata, config) do
-    Attributes.span_event_attributes(measurements, metadata, config, @mapping)
+    Attributes.span_event_attributes(measurements, render_lists(metadata), config, @mapping)
   end
+
+  # `opts` on `:reentered` and `dropped` on `:migrated` are list-valued.
+  # A list is a shape the attribute rules drop, and each of these carries
+  # what a reader needs (the failed `<send>`'s id, the state ids a
+  # migration dropped), so each renders with `inspect/1`, the rendering
+  # tuples already take. Any other value - `stacktrace` included - passes
+  # through to the rules unchanged.
+  @list_keys [:opts, :dropped]
+
+  @spec render_lists(map()) :: map()
+  defp render_lists(metadata) do
+    Enum.reduce(@list_keys, metadata, fn key, acc ->
+      case acc do
+        %{^key => value} when is_list(value) -> %{acc | key => inspect(value)}
+        _other -> acc
+      end
+    end)
+  end
+
+  @spec exception_message(map()) :: String.t()
+  defp exception_message(metadata) do
+    "#{format_term(Map.get(metadata, :kind))}: #{format_term(Map.get(metadata, :reason))}"
+  end
+
+  @spec format_term(term()) :: String.t()
+  defp format_term(term) when is_atom(term) and not is_nil(term) do
+    case Atom.to_string(term) do
+      "Elixir." <> module -> module
+      name -> name
+    end
+  end
+
+  defp format_term(term), do: inspect(term)
 end

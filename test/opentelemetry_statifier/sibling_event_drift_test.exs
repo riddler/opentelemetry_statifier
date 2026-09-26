@@ -27,10 +27,24 @@ defmodule OpentelemetryStatifier.SiblingEventDriftTest do
                Enum.sort(StatifierPersistence.Telemetry.events())
     end
 
-    # sabotage: a sixteenth name deleted from Persistence's @events -> red
-    test "the bridged list carries the contract's 16 names" do
-      assert length(Persistence.events()) == 16
-      assert length(StatifierPersistence.Telemetry.events()) == 16
+    # sabotage: a twentieth name deleted from Persistence's @events -> red
+    test "the bridged list carries the contract's 20 names" do
+      assert length(Persistence.events()) == 20
+      assert length(StatifierPersistence.Telemetry.events()) == 20
+    end
+
+    # The comparisons above prove agreement with whichever release the
+    # lock resolves, so the release is pinned here as well as in mix.exs:
+    # the list this package bridges is 0.19's, and a lock walked back to
+    # an older line would pass them against a shorter contract.
+    #
+    # sabotage: mix.exs and mix.lock walked back to statifier_persistence
+    # 0.18 -> red
+    test "the comparison runs against statifier_persistence 0.19" do
+      :ok = ensure_loaded(:statifier_persistence)
+      vsn = :statifier_persistence |> Application.spec(:vsn) |> to_string()
+
+      assert Version.match?(vsn, "~> 0.19")
     end
 
     # The retired durable noun. sp-ADR-0011 moved this family to the
@@ -73,6 +87,13 @@ defmodule OpentelemetryStatifier.SiblingEventDriftTest do
       assert :fan_out in kinds
       assert :child_started in kinds
       assert :unstarted_cancelled in kinds
+    end
+  end
+
+  defp ensure_loaded(app) do
+    case Application.load(app) do
+      :ok -> :ok
+      {:error, {:already_loaded, ^app}} -> :ok
     end
   end
 end
