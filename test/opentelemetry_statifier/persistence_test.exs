@@ -92,7 +92,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     # sabotage: setup/1 attaches with :telemetry.attach_many/4 under one
     # shared id -> red (the per-event ids the assertion reads are absent)
     test "attaches one handler id per event name, ADR-0003 decision 2's discipline" do
-      assert length(Persistence.events()) == 16
+      assert length(Persistence.events()) == 20
 
       for event <- Persistence.events() do
         assert [handler] = :telemetry.list_handlers(event)
@@ -269,6 +269,201 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       attributes = SpanCapture.attributes(span(created, :attributes))
       assert attributes["statifier_persistence.metadata?"] == true
       assert attributes["statifier_persistence.child?"] == false
+    end
+  end
+
+  describe "the events statifier_persistence 0.19 added" do
+    # sabotage: the step-exception clause is deleted from the Handler ->
+    # red (the event falls to the catch-all, the span stays open and
+    # nothing is exported)
+    test "a step exception closes the step span with an error status" do
+      span_ref = make_ref()
+
+      emit_step_start("exec-8", span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :exception],
+        %{duration: 777, monotonic_time: System.monotonic_time()},
+        %{
+          execution_id: "exec-8",
+          entry: :step,
+          span_ref: span_ref,
+          kind: :error,
+          reason: RuntimeError,
+          stacktrace: [{Some.Executor, :run, 2, [file: ~c"lib/some.ex", line: 7]}]
+        }
+      )
+
+      assert_receive {:span, step}
+      assert span(step, :name) == "statifier_persistence.execution.step"
+
+      # sabotage: close_span/5 ignores its status argument -> red (the
+      # span closes unset, and a failed drive reads as a clean one)
+      assert {:status, :error, message} = span(step, :status)
+      assert message == "error: RuntimeError"
+
+      attributes = SpanCapture.attributes(span(step, :attributes))
+      assert attributes["statifier_persistence.kind"] == "error"
+      assert attributes["statifier_persistence.reason"] == "Elixir.RuntimeError"
+      assert attributes["statifier_persistence.duration"] == 777
+      refute Map.has_key?(attributes, "statifier_persistence.stacktrace")
+    end
+
+    # sabotage: the step-exception clause closes the process's innermost
+    # open step span instead of the one under its span_ref -> red (the
+    # open span is closed with an error status by an exception it never
+    # paired with)
+    test "a step exception pairs on span_ref and closes nothing else" do
+      span_ref = make_ref()
+
+      emit_step_start("exec-9", span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :exception],
+        %{duration: 1, monotonic_time: System.monotonic_time()},
+        %{execution_id: "exec-9", entry: :step, span_ref: make_ref(), kind: :throw, reason: :x}
+      )
+
+      refute_receive {:span, _span}, 50
+
+      emit_step_stop("exec-9", span_ref)
+
+      assert_receive {:span, step}
+      assert span(step, :status) == :undefined
+    end
+
+    # sabotage: the reentered clause is deleted from the Handler -> red
+    # (the event falls to the catch-all and the step span carries no
+    # span event)
+    test "a step re-entry lands as a span event on the open step span" do
+      span_ref = make_ref()
+
+      emit_step_start("exec-10", span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :reentered],
+        %{system_time: System.system_time()},
+        %{
+          execution_id: "exec-10",
+          session_id: "session-p1",
+          content_hash: "abc123",
+          name: "error.communication",
+          origin: {:transition, 2},
+          opts: [sendid: "s1"]
+        }
+      )
+
+      emit_step_stop("exec-10", span_ref)
+
+      assert_receive {:span, step}
+
+      assert [{"statifier_persistence.execution.step.reentered", attributes}] = span_events(step)
+      assert attributes["statifier_persistence.name"] == "error.communication"
+      assert attributes["statifier_persistence.origin"] == "{:transition, 2}"
+      # sabotage: render_lists/2 is skipped for :opts -> red (a keyword
+      # list is dropped by the attribute rules and the sendid is lost)
+      assert attributes["statifier_persistence.opts"] == ~s([sendid: "s1"])
+      assert attributes["statifier.session_id"] == "session-p1"
+      refute Map.has_key?(attributes, "statifier_persistence.system_time")
+    end
+
+    # sabotage: the reentered clause hosts on :detached -> red (the
+    # re-entry becomes its own span even with the step span open, and
+    # this test's twin above sees no span event)
+    test "a step re-entry with no step span open becomes its own span" do
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :reentered],
+        %{system_time: System.system_time()},
+        %{
+          execution_id: "exec-11",
+          session_id: nil,
+          content_hash: "abc123",
+          name: "error.communication",
+          origin: {:invoke, 0, 1},
+          opts: []
+        }
+      )
+
+      assert_receive {:span, reentered}
+      assert span(reentered, :name) == "statifier_persistence.execution.step.reentered"
+      assert span(reentered, :parent_span_id) == :undefined
+
+      attributes = SpanCapture.attributes(span(reentered, :attributes))
+      assert attributes["statifier_persistence.opts"] == "[]"
+      refute Map.has_key?(attributes, "statifier.session_id")
+    end
+
+    # sabotage: [:statifier_persistence, :execution, :migrated] deleted
+    # from Persistence's @events -> red (nothing is attached to the name)
+    test "a migration becomes a point carrying both content hashes" do
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :migrated],
+        %{system_time: System.system_time()},
+        %{
+          execution_id: "exec-12",
+          from_content_hash: "old",
+          to_content_hash: "new",
+          dropped: ["gone_a", "gone_b"]
+        }
+      )
+
+      assert_receive {:span, migrated}
+      assert span(migrated, :name) == "statifier_persistence.execution.migrated"
+
+      attributes = SpanCapture.attributes(span(migrated, :attributes))
+      assert attributes["statifier_persistence.execution_id"] == "exec-12"
+      assert attributes["statifier_persistence.from_content_hash"] == "old"
+      assert attributes["statifier_persistence.to_content_hash"] == "new"
+      # sabotage: render_lists/2 is skipped for :dropped -> red
+      assert attributes["statifier_persistence.dropped"] == ~s(["gone_a", "gone_b"])
+    end
+
+    # sabotage: [:statifier_persistence, :execution, :unparked] deleted
+    # from Persistence's @events -> red (nothing is attached to the name)
+    test "an unpark becomes a point carrying the chart it goes on under" do
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :unparked],
+        %{system_time: System.system_time()},
+        %{execution_id: "exec-13", content_hash: "abc123"}
+      )
+
+      assert_receive {:span, unparked}
+      assert span(unparked, :name) == "statifier_persistence.execution.unparked"
+
+      attributes = SpanCapture.attributes(span(unparked, :attributes))
+      assert attributes["statifier_persistence.execution_id"] == "exec-13"
+      assert attributes["statifier_persistence.content_hash"] == "abc123"
+    end
+
+    # sabotage: the step-stop clause maps attributes through an explicit
+    # key list that omits :selection -> red
+    test "the step stop's selection key rides as an attribute" do
+      span_ref = make_ref()
+
+      emit_step_start("exec-14", span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :stop],
+        %{duration: 10, monotonic_time: System.monotonic_time()},
+        %{
+          execution_id: "exec-14",
+          session_id: "session-p1",
+          content_hash: "abc123",
+          entry: :step,
+          outcome: :ok,
+          status: :active,
+          reason: nil,
+          span_ref: span_ref,
+          invoke_id: nil,
+          child_count: nil,
+          selection: :none
+        }
+      )
+
+      assert_receive {:span, step}
+      attributes = SpanCapture.attributes(span(step, :attributes))
+      assert attributes["statifier_persistence.selection"] == "none"
+      assert span(step, :status) == :undefined
     end
   end
 

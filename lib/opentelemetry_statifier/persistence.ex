@@ -28,8 +28,36 @@ defmodule OpentelemetryStatifier.Persistence do
   through this bridge's own span table, not the process's ambient OTel
   context (`docs/adr/0004-sibling-setup-calls-and-bridge-owned-nesting.md`).
 
+  `[..., :step, :exception]` closes the same span in place of `:stop` when
+  the drive raised, threw or exited, and the span ends with an error
+  status whose message is `"<kind>: <reason>"` (`"error: RuntimeError"`).
+  `statifier_persistence` narrows `reason` to an atom before it emits, so
+  the message is bounded. `kind` and `reason` also ride as attributes;
+  `stacktrace` does not - it is a list, and the attribute rules drop a
+  list (`OpentelemetryStatifier.Attributes`), so the frames stay with the
+  caller, which re-raises with the original stacktrace.
+
+  `[..., :step, :stop]`'s `selection` (`:selected`, `:none`, or `nil` on a
+  stop that delivered no event) rides as the
+  `statifier_persistence.selection` string attribute, and a `nil` is
+  omitted: the step clauses copy every metadata key through the attribute
+  rules rather than through a list of keys, so a key added upstream by
+  amendment arrives without a change here.
+
   Every other event in the family is a point: a span event on the step
   span open around it, or its own zero-duration span when there is none.
+  That includes `[..., :step, :reentered]`, the one four-segment point:
+  it carries no `span_ref`, and pairs with its step only by arriving
+  inside it, on the same process, between the `:start` and the close. It
+  becomes a `statifier_persistence.execution.step.reentered` span event on
+  that step span. Its `origin` (a tuple such as `{:transition, 2}`) renders
+  with `inspect/1`, the rule tuples already follow, and its `opts` (a
+  keyword list, `[sendid: id]` or `[]`) renders with `inspect/1` too
+  rather than being dropped as a list, because the `sendid` is what a
+  reader needs to tell one failed `<send>` from another.
+  `[..., :execution, :migrated]`'s `dropped` (a list of state ids) renders
+  the same way, for the same reason: without it the point says a
+  migration happened and not what it cost.
 
   ## What it does not do
 
@@ -42,7 +70,7 @@ defmodule OpentelemetryStatifier.Persistence do
 
   ## The event list
 
-  The 16 names below are literal here rather than read from
+  The 20 names below are literal here rather than read from
   `StatifierPersistence.Telemetry.events/0`, because this package takes
   no dependency on its siblings: a bridge that made `statifier_persistence`
   (and through it Ecto, and a database driver) a dependency of every host
@@ -64,12 +92,16 @@ defmodule OpentelemetryStatifier.Persistence do
   @events [
     [:statifier_persistence, :execution, :step, :start],
     [:statifier_persistence, :execution, :step, :stop],
+    [:statifier_persistence, :execution, :step, :exception],
+    [:statifier_persistence, :execution, :step, :reentered],
     [:statifier_persistence, :execution, :lock],
     [:statifier_persistence, :adapter, :call],
     [:statifier_persistence, :identity, :refused],
     [:statifier_persistence, :execution, :created],
     [:statifier_persistence, :execution, :terminated],
     [:statifier_persistence, :execution, :discarded],
+    [:statifier_persistence, :execution, :migrated],
+    [:statifier_persistence, :execution, :unparked],
     [:statifier_persistence, :effect, :failed],
     [:statifier_persistence, :drive, :turns_exhausted],
     [:statifier_persistence, :child, :started],
@@ -87,7 +119,7 @@ defmodule OpentelemetryStatifier.Persistence do
   ## Examples
 
       iex> length(OpentelemetryStatifier.Persistence.events())
-      16
+      20
 
   """
   @spec events() :: [:telemetry.event_name()]

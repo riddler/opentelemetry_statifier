@@ -92,15 +92,18 @@ defmodule OpentelemetryStatifier.Sibling do
   end
 
   @doc """
-  Closes the paired span under `span_ref`, setting `attributes` first.
-  A `span_ref` with no open span is contract-legal (the sweep ends the
-  orphans a dead process leaves) and closes nothing.
+  Closes the paired span under `span_ref`, setting `attributes` first,
+  and `status` when one is given - the error status a sibling's
+  `:exception` close carries. A `span_ref` with no open span is
+  contract-legal (the sweep ends the orphans a dead process leaves) and
+  closes nothing.
   """
-  @spec close_span(Config.t(), reference(), integer(), map()) :: :ok
-  def close_span(%Config{table: table}, span_ref, end_time, attributes) do
+  @spec close_span(Config.t(), reference(), integer(), map(), OpenTelemetry.status() | nil) :: :ok
+  def close_span(%Config{table: table}, span_ref, end_time, attributes, status \\ nil) do
     case SpanTable.take_sibling_span(table, span_ref) do
       {:ok, %SiblingEntry{span_ctx: span_ctx}} ->
         OpenTelemetry.Span.set_attributes(span_ctx, attributes)
+        if status, do: OpenTelemetry.Span.set_status(span_ctx, status)
         OpenTelemetry.Span.end_span(span_ctx, end_time)
         :ok
 
