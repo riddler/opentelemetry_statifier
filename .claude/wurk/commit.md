@@ -60,8 +60,12 @@ stale the release after it is written.
 The boundary is `CLAUDE.md`'s authority table, which this file points at and
 does not restate. Its *version bump on a release bead's branch* row allows
 the bump only on an operator-authorized release bead inside a campaign
-carrying the operator's explicit consent, and its *release (tag,
-`mix hex.publish`, GitHub release)* row allows those never. So at ordinary
+carrying the operator's explicit consent. Its *tagging a release prep* row
+allows the tag only once the release bead's bump is merged to `origin/main`,
+naming that version at the merged commit, and its **Release preps**
+paragraph says the conductor or the session that owns the release bead tags
+it. Its *release (`mix hex.publish`, GitHub release)* row allows those never:
+publishing is the operator's. So at ordinary
 commit time the answer is unchanged: never edit the version field as part of
 a commit that is not a release prep. `.claude/wurk/release.md` is the recipe
 for the one case where it moves.

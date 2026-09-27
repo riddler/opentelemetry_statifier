@@ -172,13 +172,22 @@ No `lib/` file appears in that table, and step A explains why.
 ## What a release here still is not
 
 The skill does not tag, push, open a request or publish, and this extension
-does not either. In this repo those are the operator's, in every campaign and
-outside every campaign. `CLAUDE.md`'s authority table is explicit on both
-halves:
+does not either. The push and the request follow `CLAUDE.md`'s push row like
+any other branch; the tag and the publish each have their own row, and
+`CLAUDE.md`'s authority table and its **Release preps** paragraph are
+explicit on each:
 
-- *a release (tag, `mix hex.publish`, GitHub release)* - trigger **never**,
-  still unauthorized **always**: "publishing is the operator's, in every
-  campaign".
+- *tagging a release prep* - allowed once "the release bead's version bump is
+  merged to `origin/main`; the tag names that version at the merged commit",
+  and still unauthorized "before the bump is on `origin/main`" or for "a tag
+  naming any other version or commit". The **Release preps** paragraph names
+  who: once the prep is merged to `origin/main`, the conductor or the session
+  that owns the release bead tags that merged commit with the new version and
+  pushes the tag.
+- *a release (`mix hex.publish`, GitHub release)* - trigger **never**, still
+  unauthorized **always**: "publishing is the operator's, in every campaign".
+  Publishing (`mix hex.publish`, a docs republish included) is the operator's
+  one release step, and no consent or relay delegates it.
 - *a version bump on a release bead's branch* - allowed only on "an
   operator-authorized release bead, inside a campaign carrying the operator's
   explicit consent", and still unauthorized "on any other bead, on main, or
