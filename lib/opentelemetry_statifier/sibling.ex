@@ -8,10 +8,15 @@ defmodule OpentelemetryStatifier.Sibling do
 
   Three shapes cover both contracts (ADR-0004):
 
-    * **A paired span**, opened on a `:start` and closed on the `:stop`
-      whose `span_ref` matches. Only `statifier_persistence`'s step seam
-      has one; `sob-ADR-0006` decided against pairs on the grounds that
-      Oban already owns every interval it could bracket.
+    * **A paired span**, opened on a `:start` and closed by the `:stop`
+      or the `:exception` whose `span_ref` matches. Only
+      `statifier_persistence`'s step seam has one; `sob-ADR-0006` decided
+      against pairs on the grounds that Oban already owns every interval
+      it could bracket. The `:stop` closes through `close_span/5`. The
+      `:exception` does not: `OpentelemetryStatifier.Persistence.Handler`
+      takes the span from the table and ends it itself, with an error
+      status, so the `exception` span event it records lands between the
+      take and the end.
     * **An interval span**, for a point-in-time event that nonetheless
       carries a `duration` measurement (`[:statifier_persistence,
       :adapter, :call]` and `[..., :execution, :lock]`). Its start is

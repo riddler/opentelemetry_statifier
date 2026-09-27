@@ -301,6 +301,13 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       # clause -> red (the span closes unset, and a failed drive reads as
       # a clean one)
       assert {:status, :error, message} = span(step, :status)
+
+      # The two renderings of `reason` are deliberate and both published:
+      # the status message is the readable form, the `reason` attribute
+      # (and `exception.type`, pinned in the next test) keeps the
+      # `Elixir.` prefix. The Persistence moduledoc says why.
+      # sabotage: format_term/1 stops stripping the prefix -> red (the
+      # message reads "error: Elixir.RuntimeError")
       assert message == "error: RuntimeError"
 
       attributes = SpanCapture.attributes(span(step, :attributes))
