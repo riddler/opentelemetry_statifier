@@ -49,6 +49,16 @@ defmodule OpentelemetryStatifier.Persistence do
   original reason and stacktrace stay with the caller, which re-raises
   with them. A step that closes with `:stop` records no such event.
 
+  `reason` has two renderings on an `:error`, and the split is
+  deliberate. The `statifier_persistence.reason` attribute and
+  `exception.type` carry the module as a string with its `Elixir.`
+  prefix (`"Elixir.RuntimeError"`): that is the value a query filters
+  on, and the rendering `OpenTelemetry.Span.record_exception/4` gives an
+  exception's type, the OpenTelemetry Elixir convention. The status
+  message carries the readable form without the prefix
+  (`"error: RuntimeError"`), because it is text a person reads. Both are
+  published values, so neither changes to match the other.
+
   `[..., :step, :stop]`'s `selection` (`:selected`, `:none`, or `nil` on a
   stop that delivered no event) rides as the
   `statifier_persistence.selection` string attribute, and a `nil` is

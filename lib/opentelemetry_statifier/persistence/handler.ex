@@ -81,9 +81,9 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   # the span with an error status. `reason` is narrowed upstream to an
   # atom, so the status message is bounded; `stacktrace` is a list and
   # the attribute rules drop it, so it travels instead in the `exception`
-  # span event recorded on the span just before it ends. The close is
-  # `Sibling.close_span/5`'s, done here because the event has to land
-  # between the take and the end.
+  # span event recorded on the span just before it ends. The close does
+  # what `Sibling.close_span/5` does, but here rather than through it,
+  # because the event has to land between the take and the end.
   def handle_event(
         [:statifier_persistence, :execution, :step, :exception],
         %{monotonic_time: monotonic_time} = measurements,
@@ -228,6 +228,10 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
     end)
   end
 
+  # The readable rendering of `reason`, `Elixir.` prefix stripped, while
+  # the `reason` attribute and `exception.type` keep the module string.
+  # The split is deliberate; `OpentelemetryStatifier.Persistence`'s
+  # moduledoc says why.
   @spec exception_message(map()) :: String.t()
   defp exception_message(metadata) do
     "#{format_term(Map.get(metadata, :kind))}: #{format_term(Map.get(metadata, :reason))}"
