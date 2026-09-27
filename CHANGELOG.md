@@ -10,6 +10,38 @@ fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
 
+## [0.8.0] 2026-09-27
+
+Minor release: the Oban bridge covers `statifier_oban` 0.15's deferred invoke
+event, a step that raises records an `exception` span event, and the
+migrated point's `statifier_persistence.dropped` attribute becomes a sorted
+string array, absent when a migration drops no state - a host that reads
+`dropped` changes how it reads it.
+
+### Added
+
+- `OpentelemetryStatifier.Oban` bridges `[:statifier_oban, :invoke, :deferred]`,
+  the event `statifier_oban` 0.15 emits when an invoke handler defers its
+  answer: it becomes a `statifier_oban.invoke.deferred` span of its own,
+  like the other delivery-seam events, and is the last span this bridge
+  produces for that invocation.
+- A `statifier_persistence` step that raises, throws or exits now records an
+  `exception` span event on its step span, carrying `exception.type` and the
+  narrowed frames as `exception.stacktrace`, so a tracing backend's exception
+  view shows the failure.
+
+### Changed
+
+- The `statifier_persistence.dropped` attribute of a migration's
+  `statifier_persistence.execution.migrated` point is now a sorted string
+  array of the dropped state ids, as `statifier.configuration` is, instead of
+  one `inspect/1` string; a host that parsed or matched that string queries
+  the array's elements instead.
+- A migration that drops no state carries no `statifier_persistence.dropped`
+  attribute, because the OpenTelemetry API refuses an empty array; it carried
+  the string `"[]"` before, so a host that matched that string checks for the
+  attribute's absence instead.
+
 ## [0.7.0] 2026-09-26
 
 Minor release: the persistence bridge covers the four events

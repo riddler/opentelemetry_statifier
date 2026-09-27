@@ -1,7 +1,7 @@
 defmodule OpentelemetryStatifier.MixProject do
   use Mix.Project
 
-  @version "0.7.0"
+  @version "0.8.0"
   @source_url "https://github.com/riddler/opentelemetry_statifier"
 
   def project do
@@ -84,7 +84,7 @@ defmodule OpentelemetryStatifier.MixProject do
       # and the Hex package's requirements are unaffected because `only:`
       # deps are not published requirements.
       {:statifier_persistence, "~> 0.19", only: :test, runtime: false},
-      {:statifier_oban, "~> 0.14", only: :test, runtime: false},
+      {:statifier_oban, "~> 0.15", only: :test, runtime: false},
 
       # Dev / test
       {:ex_quality, "~> 0.15", only: :dev, runtime: false},
