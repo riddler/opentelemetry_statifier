@@ -67,9 +67,11 @@ defmodule OpentelemetryStatifier.Persistence do
   keyword list, `[sendid: id]` or `[]`) renders with `inspect/1` too
   rather than being dropped as a list, because the `sendid` is what a
   reader needs to tell one failed `<send>` from another.
-  `[..., :execution, :migrated]`'s `dropped` (a list of state ids) renders
-  the same way, for the same reason: without it the point says a
-  migration happened and not what it cost.
+  `[..., :execution, :migrated]`'s `dropped` (a list of state ids) is not
+  dropped either, for the same reason: without it the point says a
+  migration happened and not what it cost. It becomes the
+  `statifier_persistence.dropped` string-array attribute, sorted, the
+  rendering `configuration` takes, so a backend can query one state id.
 
   ## What it does not do
 

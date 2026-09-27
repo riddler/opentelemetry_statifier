@@ -24,9 +24,10 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
       has four segments but no `span_ref`, and so is a point rather than
       a half of the pair.
 
-  Of the family's three list-valued keys, `:reentered`'s `opts` and
-  `:migrated`'s `dropped` render with `inspect/1` before the attribute
-  rules see them, which would otherwise drop a list
+  Of the family's three list-valued keys, `:reentered`'s `opts` renders
+  with `inspect/1` before the attribute rules see it, which would
+  otherwise drop a list, and `:migrated`'s `dropped` becomes a sorted
+  string-array attribute, as `configuration` does
   (`OpentelemetryStatifier.Persistence`'s moduledoc says why); the third,
   `:exception`'s `stacktrace`, is left to the rules and dropped as an
   attribute, and travels instead as the `exception.stacktrace` of the
@@ -177,16 +178,42 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
 
   @spec attributes(map(), map(), Config.t()) :: map()
   defp attributes(measurements, metadata, config) do
-    Attributes.span_event_attributes(measurements, render_lists(metadata), config, @mapping)
+    {dropped, metadata} = pop_dropped(metadata)
+
+    measurements
+    |> Attributes.span_event_attributes(render_lists(metadata), config, @mapping)
+    |> put_dropped(dropped)
   end
 
-  # `opts` on `:reentered` and `dropped` on `:migrated` are list-valued.
-  # A list is a shape the attribute rules drop, and each of these carries
-  # what a reader needs (the failed `<send>`'s id, the state ids a
-  # migration dropped), so each renders with `inspect/1`, the rendering
-  # tuples already take. Any other value - `stacktrace` included - passes
-  # through to the rules unchanged.
-  @list_keys [:opts, :dropped]
+  # `dropped` on `:migrated` is the state ids a migration dropped, each a
+  # string by the upstream contract, so it becomes a sorted string-array
+  # attribute - the rendering `configuration` takes, and a value a
+  # backend can query per id. It is taken out of the metadata before the
+  # attribute rules see it, which would drop a list, and put back under
+  # the family's namespace afterwards. A `dropped` that is not a list of
+  # strings stays in the metadata and meets the rules like any other
+  # value: a malformed value costs one attribute, never the event.
+  @dropped_attribute "statifier_persistence.dropped"
+
+  @spec pop_dropped(map()) :: {[String.t()] | nil, map()}
+  defp pop_dropped(%{dropped: dropped} = metadata) when is_list(dropped) do
+    if Enum.all?(dropped, &is_binary/1),
+      do: {Enum.sort(dropped), Map.delete(metadata, :dropped)},
+      else: {nil, metadata}
+  end
+
+  defp pop_dropped(metadata), do: {nil, metadata}
+
+  @spec put_dropped(map(), [String.t()] | nil) :: map()
+  defp put_dropped(attributes, nil), do: attributes
+  defp put_dropped(attributes, dropped), do: Map.put(attributes, @dropped_attribute, dropped)
+
+  # `opts` on `:reentered` is list-valued. A list is a shape the
+  # attribute rules drop, and it carries what a reader needs (the failed
+  # `<send>`'s id), so it renders with `inspect/1`, the rendering tuples
+  # already take. Any other value - `stacktrace` included - passes through
+  # to the rules unchanged.
+  @list_keys [:opts]
 
   @spec render_lists(map()) :: map()
   defp render_lists(metadata) do
