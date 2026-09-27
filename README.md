@@ -54,7 +54,7 @@ unbounded is exported as an attribute by default.
 ```elixir
 def deps do
   [
-    {:opentelemetry_statifier, "~> 0.7.0"}
+    {:opentelemetry_statifier, "~> 0.8.0"}
   ]
 end
 ```
