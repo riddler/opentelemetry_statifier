@@ -192,7 +192,10 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   # attribute rules see it, which would drop a list, and put back under
   # the family's namespace afterwards. A `dropped` that is not a list of
   # strings stays in the metadata and meets the rules like any other
-  # value: a malformed value costs one attribute, never the event.
+  # value: a malformed value costs one attribute, never the event. An
+  # empty `dropped` is put back as `[]`, and the OpenTelemetry API refuses
+  # an empty list, so a migration that drops no state exports no
+  # `dropped` attribute.
   @dropped_attribute "statifier_persistence.dropped"
 
   @spec pop_dropped(map()) :: {[String.t()] | nil, map()}

@@ -519,6 +519,32 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       assert attributes["statifier_persistence.dropped"] == ["gone_a", "gone_b"]
     end
 
+    # The OpenTelemetry API refuses an empty list as an attribute value, so
+    # a migration that drops no state - the common case - carries no
+    # `dropped` attribute at all, rather than an empty array.
+    # sabotage: put_dropped/2 renders an empty list with inspect/1 -> red
+    # (the attribute is present as the string "[]", as it was before the
+    # array rendering)
+    test "a migration that drops no state carries no dropped attribute" do
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :migrated],
+        %{system_time: System.system_time()},
+        %{
+          execution_id: "exec-12b",
+          from_content_hash: "old",
+          to_content_hash: "new",
+          dropped: []
+        }
+      )
+
+      assert_receive {:span, migrated}
+      assert span(migrated, :name) == "statifier_persistence.execution.migrated"
+
+      attributes = SpanCapture.attributes(span(migrated, :attributes))
+      assert attributes["statifier_persistence.execution_id"] == "exec-12b"
+      refute Map.has_key?(attributes, "statifier_persistence.dropped")
+    end
+
     # sabotage: [:statifier_persistence, :execution, :unparked] deleted
     # from Persistence's @events -> red (nothing is attached to the name)
     test "an unpark becomes a point carrying the chart it goes on under" do

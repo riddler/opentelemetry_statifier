@@ -72,6 +72,8 @@ defmodule OpentelemetryStatifier.Persistence do
   migration happened and not what it cost. It becomes the
   `statifier_persistence.dropped` string-array attribute, sorted, the
   rendering `configuration` takes, so a backend can query one state id.
+  A migration that drops no state carries no `dropped` attribute: the
+  OpenTelemetry API refuses an empty list as an attribute value.
 
   ## What it does not do
 
