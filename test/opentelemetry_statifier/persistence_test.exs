@@ -499,7 +499,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
           execution_id: "exec-12",
           from_content_hash: "old",
           to_content_hash: "new",
-          dropped: ["gone_a", "gone_b"]
+          dropped: ["gone_b", "gone_a"]
         }
       )
 
@@ -510,8 +510,13 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       assert attributes["statifier_persistence.execution_id"] == "exec-12"
       assert attributes["statifier_persistence.from_content_hash"] == "old"
       assert attributes["statifier_persistence.to_content_hash"] == "new"
-      # sabotage: render_lists/2 is skipped for :dropped -> red
-      assert attributes["statifier_persistence.dropped"] == ~s(["gone_a", "gone_b"])
+      # The dropped state ids are a sorted string array, queryable the way
+      # `configuration` is, not one inspect string.
+      # sabotage: the dropped clause skips Enum.sort/1 -> red (the ids
+      # arrive in emission order, "gone_b" first)
+      # sabotage: :dropped is left to the attribute rules -> red (a list is
+      # a shape the rules drop, and the key is absent)
+      assert attributes["statifier_persistence.dropped"] == ["gone_a", "gone_b"]
     end
 
     # sabotage: [:statifier_persistence, :execution, :unparked] deleted
