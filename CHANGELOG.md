@@ -6,9 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Entries for unreleased work are not written here directly. Each issue drops a
-fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.8.0/changelog.d/README.md); the fragments are assembled
+fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.9.0/changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
+
+## [0.9.0] 2026-09-28
+
+Minor release: the persistence bridge exports `statifier_persistence`'s
+batch migration span, so a `migrate_batch/3` call becomes one span carrying
+the report's counts, with the spans and migrated events of the executions
+it moves nested inside it.
+
+### Added
+
+- `OpentelemetryStatifier.Persistence` bridges `statifier_persistence`'s batch migration span: a `migrate_batch/3` call becomes a `statifier_persistence.execution.migrate_batch` span carrying the report's counts as attributes, and each execution it moves lands on it as a `migrated` span event.
+
+### Changed
+
+- Inside a `statifier_persistence` `migrate_batch/3` call, the `statifier_persistence.execution.lock` and `statifier_persistence.adapter.call` spans each execution's turn opens now nest under the batch span, where they were the roots of their own traces, and each migrated execution is a `migrated` span event on the batch span, where it was a zero-duration root span of its own.
 
 ## [0.8.0] 2026-09-27
 
