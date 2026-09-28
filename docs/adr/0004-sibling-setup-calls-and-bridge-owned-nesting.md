@@ -274,7 +274,7 @@ Read at `opentelemetry_statifier` `555f9a8` (this file) and
 
 ## Amendment, 2026-09-28 (ots-g74): the batch migration span is the second paired span
 
-Status of this amendment: proposed (2026-09-28)
+Status of this amendment: accepted (2026-09-28)
 
 `statifier_persistence` 0.20.0 grew the `:start`/`:stop` pair this
 record's Consequences name as what would reopen it: its ADR-0017
@@ -338,3 +338,53 @@ Read at `opentelemetry_statifier` `e4609648cc817d0719f33931cdd43bbc0889665d`
 `execution_migrate_batch_stop/3`; `docs/adr/0017-migrating-the-executions-on-a-chart.md`,
 decision 6). `@paired_seams` is added by the change this amendment
 records.
+
+## Note, 2026-09-28 (ots-eca): the batch-pair amendment is accepted
+
+The 2026-09-28 amendment above said it stays proposed until the code it
+describes ships in a published version. That version is
+`opentelemetry_statifier` 0.9.0, published on hex.pm
+(2026-09-28T17:04Z) from tag `v0.9.0` at
+`6bd3fe81c2d1cb469a6dfc6921e776f72c260f56`, so its status word now reads
+accepted. Nothing else in the amendment or the record changes.
+
+Every claim the amendment makes was re-read at that commit, by anchor:
+
+- The two paired seams share one set of clauses: `@paired_seams` is
+  `[:step, :migrate_batch]` and guards the `:start`, `:stop` and
+  `:exception` clauses of
+  `OpentelemetryStatifier.Persistence.Handler.handle_event/4`; the
+  `:exception` clause records an `exception` span event and an error
+  status before the span ends.
+- The batch span's rows are decision 4's `:sibling_span` rows:
+  `OpentelemetryStatifier.Sibling.open_span/6` writes through
+  `OpentelemetryStatifier.SpanTable.put_sibling_span/4`.
+- The three batch names are in `OpentelemetryStatifier.Persistence`'s
+  `@events`.
+- The `:stop`'s counts become `statifier_persistence.`-prefixed
+  attributes beside `duration`, and a `nil` metadata value is omitted
+  (`OpentelemetryStatifier.Attributes.span_event_attributes/4`); a
+  whole-batch refusal closes through `:stop` with no error status
+  (`Sibling.close_span/5` sets a status only when one is given).
+- A point lands on the innermost bridge span open in its own process
+  (`OpentelemetryStatifier.Sibling.point/5`), and the lock and
+  adapter-call spans take their parent from
+  `OpentelemetryStatifier.Sibling.parent_ctx/2`.
+- The tests in `test/opentelemetry_statifier/persistence_test.exs` pin
+  each item: "a real apply over two executions exports one span with the
+  report's counts", "each migrated execution lands as a span event on the
+  batch span", "the spans each execution's turn opens nest inside the
+  batch span", "a dry run's span carries dry_run true, its counts, and no
+  migrated event", "a batch refused whole closes with its reason and
+  every count at zero" and "a batch exception fails the span with an
+  error status and an exception event".
+
+The upstream half was re-read at `statifier_persistence` `origin/main`
+`cbc71f2`, which leaves `lib/statifier_persistence/telemetry.ex`,
+`lib/statifier_persistence/executions.ex` and
+`docs/adr/0017-migrating-the-executions-on-a-chart.md` as they were at
+the amendment's `db26e2f9585bc5e1d2b1e1b3da9c061f8c8f164b`: the pair's
+names and measurements (`@events`, `execution_migrate_batch_stop/3`),
+ADR-0017 decision 6, and `migrate_batch/3` emitting each `:migrated` on
+the calling process. The pair itself first shipped in
+`statifier_persistence` 0.20.0 (`v0.20.0`).
