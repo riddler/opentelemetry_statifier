@@ -242,8 +242,11 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   # call itself needs the exception struct, and the narrowed event
   # carries only its module, so the attributes are built here.
   # `exception.type` is the module for an `:error`, as `record_exception/4`
-  # renders it, and `"<kind>:<reason>"` for a `:throw` or an `:exit`, as
-  # `:otel_span.record_exception/5` renders one. `exception.stacktrace` is
+  # renders it, and `"<kind>:<reason>"` for a `:throw` or an `:exit`. That
+  # is the shape `:otel_span.record_exception/5` gives one, not its bytes:
+  # that call prints each term as Erlang does, so a module reason keeps
+  # its `Elixir.` prefix inside single quotes, where `format_term/1` here
+  # strips the prefix and adds no quotes. `exception.stacktrace` is
   # the narrowed frames formatted one per line; it is omitted when the
   # event carries no list of frames.
   @spec exception_event_attributes(map()) :: map()

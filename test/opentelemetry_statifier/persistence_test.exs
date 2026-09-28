@@ -411,6 +411,33 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       refute Map.has_key?(attributes, "exception.stacktrace")
     end
 
+    # sabotage: the step-exception clause reads the entry under its
+    # span_ref without deleting it (an :ets.lookup in place of
+    # take_sibling_span/2) -> red (the span is exported but its entry
+    # stays in the table, and the next event on this process nests under
+    # a span that has already ended)
+    test "a step exception takes the step span's entry out of the span table", %{
+      table: table
+    } do
+      span_ref = make_ref()
+
+      emit_step_start("exec-8k", span_ref)
+
+      assert {:ok, _entry} = SpanTable.fetch_innermost_sibling_span(table, self())
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :step, :exception],
+        %{duration: 1, monotonic_time: System.monotonic_time()},
+        %{execution_id: "exec-8k", entry: :step, span_ref: span_ref, kind: :throw, reason: :x}
+      )
+
+      assert_receive {:span, step}
+      assert span(step, :name) == "statifier_persistence.execution.step"
+
+      assert SpanTable.fetch_innermost_sibling_span(table, self()) == :error
+      assert :ets.match_object(table, {{:sibling_span, :_}, :_, :_}) == []
+    end
+
     # sabotage: the step-exception clause closes the process's innermost
     # open step span instead of the one under its span_ref -> red (the
     # open span is closed with an error status by an exception it never
