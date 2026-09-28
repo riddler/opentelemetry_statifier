@@ -120,7 +120,7 @@ compose in a host. Attach the ones you run:
 ```
 
 `OpentelemetryStatifier.Persistence` bridges the durable stepper's
-twenty `[:statifier_persistence, ...]` events. One serialized drive -
+twenty-three `[:statifier_persistence, ...]` events. One serialized drive -
 lock, load, decode, identity-check, advance, execute effects, persist -
 becomes a `statifier_persistence.execution.step` span, and **the
 macrostep span for that step nests inside it**, as do the
@@ -133,6 +133,18 @@ identity refusal, a failed effect, an `error.communication` re-entry,
 the child-execution seam - land as span events on the step span, and a
 drive that raised, threw or exited closes the step span with an error
 status.
+
+A batch migration - one `StatifierPersistence.Executions.migrate_batch/3`
+call, dry run included - becomes a
+`statifier_persistence.execution.migrate_batch` span carrying the plan's
+two content hashes, `dry_run`, the `outcome`, the `reason` a batch
+refused whole was refused for, and the report's counts as one integer
+attribute per outcome (`migrated`, `refused`, `parked` and `skipped` for
+an apply; `would_migrate`, `would_refuse` and `skipped` for a dry run),
+zeros included. Each execution the apply moves lands on it as a
+`statifier_persistence.execution.migrated` span event, so one span
+answers what the batch moved and what it cost; a dry run carries no
+such event.
 
 `OpentelemetryStatifier.Oban` bridges the durable seams' fifteen
 `[:statifier_oban, ...]` events. Scheduling events fire on the process

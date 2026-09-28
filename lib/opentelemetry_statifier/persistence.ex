@@ -18,8 +18,8 @@ defmodule OpentelemetryStatifier.Persistence do
   ## What it produces
 
   `[:statifier_persistence, :execution, :step, :start]` / `[..., :stop]` is
-  the one paired seam the sibling contracts define, and it becomes a
-  `statifier_persistence.execution.step` span - the interval the durable
+  the first of the two paired seams the sibling contracts define, and it
+  becomes a `statifier_persistence.execution.step` span - the interval the durable
   stepper owns and nothing else measures: lock, load, decode,
   identity-check, advance, execute effects, persist. **The macrostep span
   for the step nests inside it**, as do the `statifier_persistence.adapter.call`
@@ -91,6 +91,36 @@ defmodule OpentelemetryStatifier.Persistence do
   A migration that drops no state carries no `dropped` attribute: the
   OpenTelemetry API refuses an empty list as an attribute value.
 
+  ## The batch migration span
+
+  `[:statifier_persistence, :execution, :migrate_batch, :start]` /
+  `[..., :stop]` is the second paired seam: one
+  `StatifierPersistence.Executions.migrate_batch/3` call, dry run
+  included, becomes a `statifier_persistence.execution.migrate_batch`
+  span, opened, closed and failed exactly as the step span is, on the
+  same `span_ref` pairing. Its attributes are the plan's two content
+  hashes (`statifier_persistence.from`, `statifier_persistence.to`),
+  `statifier_persistence.dry_run`, and on the close
+  `statifier_persistence.outcome` (`"ok"` or `"error"`),
+  `statifier_persistence.reason` (the refusal of the whole batch, omitted
+  when there is none), `statifier_persistence.duration`, and one integer
+  attribute per outcome of the mode carrying the report's count, zeros
+  included: `would_migrate`, `would_refuse` and `skipped` for a dry run;
+  `migrated`, `refused`, `parked` and `skipped` for an apply. A batch
+  refused whole closes with every count at zero and no error status, as
+  a step whose `outcome` is `:error` does. `[..., :migrate_batch,
+  :exception]` ends it with the error status and the `exception` span
+  event the step span's exception close records.
+
+  Each execution the apply moves emits its own
+  `[:statifier_persistence, :execution, :migrated]` on the calling
+  process, inside the batch, so it lands as a
+  `statifier_persistence.execution.migrated` span event on the batch
+  span, by the point rule below; a dry run emits none, so its span
+  carries no such event. The lock and adapter-call spans each execution's
+  turn opens nest inside the batch span, as they nest inside a step. A
+  `:migrated` fired outside any batch is unchanged: a point, as before.
+
   ## What it does not do
 
   `statifier_persistence` also emits the *interpreter's* family with
@@ -102,7 +132,7 @@ defmodule OpentelemetryStatifier.Persistence do
 
   ## The event list
 
-  The 20 names below are literal here rather than read from
+  The 23 names below are literal here rather than read from
   `StatifierPersistence.Telemetry.events/0`, because this package takes
   no dependency on its siblings: a bridge that made `statifier_persistence`
   (and through it Ecto, and a database driver) a dependency of every host
@@ -136,6 +166,9 @@ defmodule OpentelemetryStatifier.Persistence do
     [:statifier_persistence, :execution, :unparked],
     [:statifier_persistence, :effect, :failed],
     [:statifier_persistence, :drive, :turns_exhausted],
+    [:statifier_persistence, :execution, :migrate_batch, :start],
+    [:statifier_persistence, :execution, :migrate_batch, :stop],
+    [:statifier_persistence, :execution, :migrate_batch, :exception],
     [:statifier_persistence, :child, :started],
     [:statifier_persistence, :child, :refused],
     [:statifier_persistence, :child, :recorded],
@@ -151,7 +184,7 @@ defmodule OpentelemetryStatifier.Persistence do
   ## Examples
 
       iex> length(OpentelemetryStatifier.Persistence.events())
-      20
+      23
 
   """
   @spec events() :: [:telemetry.event_name()]

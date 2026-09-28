@@ -271,3 +271,70 @@ what they were when they were decided.
 Read at `opentelemetry_statifier` `555f9a8` (this file) and
 `statifier_persistence` `05993b09a6038bdb4549fb115a3661f06270c53f`
 (`lib/statifier_persistence/telemetry.ex`, `@events`).
+
+## Amendment, 2026-09-28 (ots-g74): the batch migration span is the second paired span
+
+Status of this amendment: proposed (2026-09-28)
+
+`statifier_persistence` 0.20.0 grew the `:start`/`:stop` pair this
+record's Consequences name as what would reopen it: its ADR-0017
+decision 6 brackets one `StatifierPersistence.Executions.migrate_batch/3`
+call with `[:statifier_persistence, :execution, :migrate_batch, :start]`,
+`[..., :stop]` and `[..., :exception]`, and emits each execution's
+`[:statifier_persistence, :execution, :migrated]` inside it, on the
+calling process. Decision 5 says a pair becomes a span and that only the
+step seam has one. This amendment gives the second pair its home and
+changes nothing else.
+
+1. **The batch pair is the second paired span, under decision 5's rule
+   unchanged.** `:start` opens a
+   `statifier_persistence.execution.migrate_batch` span keyed by
+   `span_ref` and tagged with the emitting pid, `:stop` closes it and
+   `:exception` fails it with an error status and an `exception` span
+   event, exactly as the step pair does. The two pairs share one set of
+   handler clauses (`@paired_seams` in
+   `OpentelemetryStatifier.Persistence.Handler`); the table rows are
+   decision 4's `:sibling_span` rows, untouched
+   (`OpentelemetryStatifier.Sibling.open_span/6`).
+2. **The report's counts are attributes by decision 7's rule.** The
+   `:stop` carries one count per outcome of the mode as a measurement,
+   every key present and zeros included, so each count becomes an integer
+   attribute under `statifier_persistence.`, beside `duration`; `from`,
+   `to`, `dry_run`, `outcome` and `reason` are metadata and map as every
+   other metadata key does, a `nil` `reason` omitted
+   (`OpentelemetryStatifier.Attributes.span_event_attributes/4`). A batch
+   refused whole closes through `:stop` with `outcome: :error` and no
+   error status, as a step whose `outcome` is `:error` does.
+3. **Each migrated execution is a span event on the batch span, by
+   decision 6 unchanged.** `:migrated` is a point, and a point lands on
+   the innermost bridge span open in its own process
+   (`OpentelemetryStatifier.Sibling.point/5`), which inside a batch is the
+   batch span. The migrated execution is therefore a
+   `statifier_persistence.execution.migrated` span event on it, not a
+   child span, and a dry run, which emits no `:migrated`, carries no such
+   event. A `:migrated` fired outside any batch is what it was: a point on
+   whatever bridge span is open around it, or its own zero-duration span.
+4. **The spans an execution's turn opens nest inside the batch span, by
+   decision 4 unchanged.** The lock and adapter-call spans take their
+   parent from the innermost bridge span open in their process
+   (`OpentelemetryStatifier.Sibling.parent_ctx/2`), so inside a batch
+   they are its children, as inside a step they are the step's.
+
+Decision 5's parenthetical, "only sp's step seam has one", is read with
+item 1 above; every other decision and the 2026-09-02 and 2026-09-12
+Notes stand as written. The record stays accepted, and this amendment is
+proposed until the code it describes ships in a published version.
+What would reopen
+this amendment: a third sibling pair, or the batch contract moving
+`:migrated` off the calling process, where decision 6 would no longer
+place it on the batch span.
+
+Read at `opentelemetry_statifier` `e4609648cc817d0719f33931cdd43bbc0889665d`
+(`lib/opentelemetry_statifier/sibling.ex`, `open_span/6`, `point/5`,
+`parent_ctx/2`; `lib/opentelemetry_statifier/attributes.ex`,
+`span_event_attributes/4`) and `statifier_persistence`
+`db26e2f9585bc5e1d2b1e1b3da9c061f8c8f164b`, v0.22.0
+(`lib/statifier_persistence/telemetry.ex`, `@events` and
+`execution_migrate_batch_stop/3`; `docs/adr/0017-migrating-the-executions-on-a-chart.md`,
+decision 6). `@paired_seams` is added by the change this amendment
+records.
