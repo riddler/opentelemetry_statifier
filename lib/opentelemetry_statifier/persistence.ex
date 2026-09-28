@@ -44,7 +44,13 @@ defmodule OpentelemetryStatifier.Persistence do
   `:exit` (`"exit:redacted"`) - and `exception.stacktrace`, the frames
   `statifier_persistence` narrowed before it emitted (module, function,
   arity, file and line, no arguments), formatted one per line as
-  `Exception.format_stacktrace/1` lays them out. There is no
+  `Exception.format_stacktrace/1` lays them out. Nothing in this package
+  caps how many frames that is: every frame the event arrives with is
+  formatted, and the narrowing keeps every frame it is given, so the
+  bound is the VM's backtrace depth (the `:backtrace_depth` system flag,
+  8 by default, set with `:erlang.system_flag/2`). The OpenTelemetry
+  SDK's attribute value length limit, when a host sets one, truncates
+  the formatted string; it is unset by default. There is no
   `exception.message`: the narrowed event carries no message. The
   original reason and stacktrace stay with the caller, which re-raises
   with them. A step that closes with `:stop` records no such event.
