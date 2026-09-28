@@ -19,10 +19,10 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
       `:exception` closes it, the latter with an error status;
     * `[..., :adapter, :call]` and `[..., :execution, :lock]` are points that
       carry a `duration`, and become spans back-dated by it;
-    * everything else is a point, and becomes a span event on the step
-      span open around it - `[..., :step, :reentered]` included, which
-      has four segments but no `span_ref`, and so is a point rather than
-      a half of the pair.
+    * everything else is a point, and becomes a span event on the paired
+      span open around it (the step or the batch) -
+      `[..., :step, :reentered]` included, which has four segments but
+      no `span_ref`, and so is a point rather than a half of the pair.
 
   Of the family's three list-valued keys, `:reentered`'s `opts` renders
   with `inspect/1` before the attribute rules see it, which would
