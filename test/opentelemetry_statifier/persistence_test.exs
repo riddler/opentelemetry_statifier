@@ -579,6 +579,38 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       refute Map.has_key?(attributes, "statifier_persistence.dropped")
     end
 
+    # A conforming event cannot carry this - state ids are strings by the
+    # upstream contract - but a `dropped` list that is not all strings is
+    # left in the metadata for the attribute rules, which drop a list: the
+    # attribute is absent and the rest of the point survives. The elements
+    # are atoms rather than a string mixed with a non-string because the
+    # OpenTelemetry API itself refuses a list that is not homogeneous, so
+    # only a homogeneous non-string list tells the fallback apart from the
+    # string-array rendering.
+    # sabotage: pop_dropped/1 takes any list, skipping its all-strings
+    # check -> red (the atoms export as a sorted array under the dropped
+    # key)
+    test "a dropped list that is not all strings carries no dropped attribute" do
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :migrated],
+        %{system_time: System.system_time()},
+        %{
+          execution_id: "exec-12c",
+          from_content_hash: "old",
+          to_content_hash: "new",
+          dropped: [:gone_b, :gone_a]
+        }
+      )
+
+      assert_receive {:span, migrated}
+      assert span(migrated, :name) == "statifier_persistence.execution.migrated"
+
+      attributes = SpanCapture.attributes(span(migrated, :attributes))
+      assert attributes["statifier_persistence.execution_id"] == "exec-12c"
+      assert attributes["statifier_persistence.to_content_hash"] == "new"
+      refute Map.has_key?(attributes, "statifier_persistence.dropped")
+    end
+
     # sabotage: [:statifier_persistence, :execution, :unparked] deleted
     # from Persistence's @events -> red (nothing is attached to the name)
     test "an unpark becomes a point carrying the chart it goes on under" do
