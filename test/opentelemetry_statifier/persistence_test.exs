@@ -9,6 +9,9 @@ defmodule OpentelemetryStatifier.PersistenceTest do
   alias OpentelemetryStatifier.{Persistence, SpanCapture, SpanTable}
   alias OpentelemetryStatifier.Persistence.Handler
 
+  # sabotage: events/0's doctest expects 21 where the list holds 20 -> red
+  doctest OpentelemetryStatifier.Persistence
+
   setup context do
     SpanCapture.start(context)
 

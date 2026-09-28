@@ -9,6 +9,9 @@ defmodule OpentelemetryStatifier.ObanTest do
   alias OpentelemetryStatifier.{Oban, Persistence, SpanCapture, SpanTable}
   alias OpentelemetryStatifier.Oban.Handler
 
+  # sabotage: events/0's doctest expects 14 where the list holds 15 -> red
+  doctest OpentelemetryStatifier.Oban
+
   @traceparent "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 
   setup context do
