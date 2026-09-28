@@ -167,9 +167,14 @@ repo's ADRs adopt it rather than restating it:
   `OpentelemetryStatifier.Oban`) and the bridge-owned nesting that
   amends ADR-0003 decision 8.
 - The sibling event contracts, frozen in their own repos and never
-  restated here: `statifier_persistence`'s ADR-0009 and `docs/telemetry.md`
-  (14 events), `statifier_oban`'s ADR-0006 and `docs/telemetry.md`
-  (14 events).
+  restated here: `statifier_persistence`'s ADR-0009 and `docs/telemetry.md`,
+  `statifier_oban`'s ADR-0006 and `docs/telemetry.md`. No event count is
+  kept in this file: the lists this package bridges are
+  `OpentelemetryStatifier.Persistence.events/0` and
+  `OpentelemetryStatifier.Oban.events/0`, whose doctests pin each count,
+  and `test/opentelemetry_statifier/sibling_event_drift_test.exs` fails the
+  gate when either list stops matching the sibling release the lock
+  resolves.
 
 Two rules that do not wait to be looked up:
 
