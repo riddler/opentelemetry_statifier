@@ -110,6 +110,22 @@ resolves, not a SHA written down here.
    unlinked. Do not add one for the new version, and do not "repair" the file
    by adding the whole block.
 6. Delete the promoted fragment files in the same commit. `README.md` stays.
+7. **Move the header's `changelog.d/` link to the version being cut.** The
+   paragraph at the top of `CHANGELOG.md` links `changelog.d/README.md` by
+   absolute GitHub URL at a release tag,
+   `https://github.com/riddler/opentelemetry_statifier/blob/vX.Y.Z/changelog.d/README.md`,
+   not at `main`: `changelog.d/` is not a published file, and the family's
+   HexDocs standard links an unpublished file at the release tag whenever the
+   file exists there (it falls back to `blob/main` only when it does not).
+   `changelog.d/README.md` survives every release (step 6), so it exists at
+   every tag, and the link always names a tag. Rewrite the `vX.Y.Z` in that
+   URL to the version this prep cuts, in every release - major, minor and
+   patch alike. The tag does not exist yet while the prep is open; it is
+   created at the merged prep commit, before the published docs are built
+   from it. This is the one edit step B makes in `CHANGELOG.md` outside the new
+   section, and
+   nothing else moves the link: left alone, it drifts one release behind at
+   each prep, which is how it came to name v0.7.0 after 0.8.0 had shipped.
 
 Whether the release is major, minor or patch is not decided here - the version
 is explicit input to the skill. The fragments' headings are evidence for that
