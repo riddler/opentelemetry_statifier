@@ -7,8 +7,13 @@ defmodule OpentelemetryStatifier.Oban.Handler do
   only two *shapes*: a scheduling event lands on the span open in the
   emitting process - the macrostep span when the session is stepping
   there, the durable driver's step span when a durable execution id is all the
-  event carries - and a delivery event becomes its own span linked to
-  the arming trace. The fan-out seam adds names, not a third shape:
+  event carries - and a delivery event becomes its own span, a root that
+  links to the arming trace through `caller_context` when the event
+  carries one. The timer seam's `:fired` and `:discarded` carry it. The
+  invoke seam's delivery kinds - `:delivered`, `:discarded`, `:failed`
+  and `:deferred` - carry no `caller_context`, so each of those stays an
+  unlinked root, correlated by `statifier.session_id`. The fan-out seam
+  adds names, not a third shape:
   `:fan_out` and `:child_started` fire inside Oban jobs carrying
   `caller_context` and so are delivery-shaped, while
   `:unstarted_cancelled` carries none, fires synchronously from the
@@ -22,10 +27,11 @@ defmodule OpentelemetryStatifier.Oban.Handler do
 
   @mapping Sibling.mapping("statifier_oban", :scope)
 
-  # The kinds that fire inside an Oban job. `:delivered` and `:deferred`
-  # carry no `caller_context` and are delivery-shaped all the same: the
-  # invoke job emits them, so each is its own root, unlinked, correlated
-  # by `statifier.session_id`.
+  # The kinds that fire inside an Oban job. The invoke seam's
+  # `:delivered`, `:discarded`, `:failed` and `:deferred` carry no
+  # `caller_context` and are delivery-shaped all the same: the invoke job
+  # emits them, so each is its own root, unlinked, correlated by
+  # `statifier.session_id`.
   # `:fan_out` and `:child_started` are the fan-out seam's two: the
   # invocation's dispatch and one per chunk child, each a root linked to
   # the trace that planned it. `:unstarted_cancelled` is deliberately
