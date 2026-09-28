@@ -8,8 +8,10 @@ defmodule OpentelemetryStatifier.PersistenceTest do
 
   alias OpentelemetryStatifier.{Persistence, SpanCapture, SpanTable}
   alias OpentelemetryStatifier.Persistence.Handler
+  alias StatifierPersistence.{Executions, Storage}
+  alias StatifierPersistence.Migration.Plan
 
-  # sabotage: events/0's doctest expects 21 where the list holds 20 -> red
+  # sabotage: events/0's doctest expects 24 where the list holds 23 -> red
   doctest OpentelemetryStatifier.Persistence
 
   setup context do
@@ -95,7 +97,7 @@ defmodule OpentelemetryStatifier.PersistenceTest do
     # sabotage: setup/1 attaches with :telemetry.attach_many/4 under one
     # shared id -> red (the per-event ids the assertion reads are absent)
     test "attaches one handler id per event name, ADR-0003 decision 2's discipline" do
-      assert length(Persistence.events()) == 20
+      assert length(Persistence.events()) == 23
 
       for event <- Persistence.events() do
         assert [handler] = :telemetry.list_handlers(event)
@@ -660,6 +662,268 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       attributes = SpanCapture.attributes(span(step, :attributes))
       assert attributes["statifier_persistence.selection"] == "none"
       assert span(step, :status) == :undefined
+    end
+  end
+
+  describe "the batch migration span" do
+    # A library loan waits in `awaiting_return`; the next revision of its
+    # document gives the check-in step a `damaged` outcome and changes
+    # nothing a waiting loan stands on, so both loans move.
+    @loan """
+    <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="awaiting_return">
+      <state id="awaiting_return">
+        <transition event="copy.returned" target="checking_in"/>
+      </state>
+      <state id="checking_in">
+        <transition event="copy.checked" target="returned"/>
+      </state>
+      <final id="returned"/>
+    </scxml>
+    """
+
+    @loan_checkin """
+    <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="awaiting_return">
+      <state id="awaiting_return">
+        <transition event="copy.returned" target="checking_in"/>
+      </state>
+      <state id="checking_in">
+        <transition event="copy.checked" target="returned"/>
+        <transition event="copy.damaged" target="damaged"/>
+      </state>
+      <final id="returned"/>
+      <final id="damaged"/>
+    </scxml>
+    """
+
+    defp quiet(_effect, _context), do: :ok
+
+    # Two loans on the in-memory adapter, both on the first revision, and
+    # the plan that moves them to the second.
+    defp two_loans do
+      {:ok, store} = Storage.new(Storage.InMemory, [])
+      {:ok, from} = Statifier.compile(@loan)
+      {:ok, to} = Statifier.compile(@loan_checkin)
+      :ok = Storage.save_chart(store, from, @loan)
+      :ok = Storage.save_chart(store, to, @loan_checkin)
+
+      for id <- ["loan-a", "loan-b"] do
+        {:ok, _execution, _ms} = Executions.create(store, id, from, executor: &quiet/2)
+      end
+
+      {:ok, plan} =
+        Plan.new(from: from.identity.content_hash, to: to.identity.content_hash, states: %{})
+
+      drain_spans()
+      %{store: store, from: from, to: to, plan: plan}
+    end
+
+    defp migrate_batch(%{store: store, from: from, to: to, plan: plan}, opts) do
+      Executions.migrate_batch(
+        store,
+        plan,
+        [from_machine: from, to_machine: to] ++ opts
+      )
+    end
+
+    defp drain_spans(acc \\ []) do
+      receive do
+        {:span, captured} -> drain_spans([captured | acc])
+      after
+        0 -> Enum.reverse(acc)
+      end
+    end
+
+    defp named(spans, name), do: Enum.filter(spans, &(span(&1, :name) == name))
+
+    defp emit_batch_start(span_ref) do
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :migrate_batch, :start],
+        %{system_time: System.system_time(), monotonic_time: System.monotonic_time()},
+        %{from: "loan-v1", to: "loan-v2", dry_run: false, span_ref: span_ref}
+      )
+    end
+
+    # sabotage: the three migrate_batch names deleted from Persistence's
+    # @events -> red (no batch span is exported; the migrated points
+    # become two root spans of their own)
+    test "a real apply over two executions exports one span with the report's counts" do
+      loans = two_loans()
+
+      assert {:ok, %{counts: counts}} = migrate_batch(loans, [])
+      assert counts == %{migrated: 2, refused: 0, parked: 0, skipped: 0}
+
+      spans = drain_spans()
+      assert [batch] = named(spans, "statifier_persistence.execution.migrate_batch")
+      assert span(batch, :parent_span_id) == :undefined
+      assert span(batch, :status) == :undefined
+
+      attributes = SpanCapture.attributes(span(batch, :attributes))
+      assert attributes["statifier_persistence.from"] == loans.from.identity.content_hash
+      assert attributes["statifier_persistence.to"] == loans.to.identity.content_hash
+      assert attributes["statifier_persistence.dry_run"] == false
+      assert attributes["statifier_persistence.outcome"] == "ok"
+      refute Map.has_key?(attributes, "statifier_persistence.reason")
+      assert is_integer(attributes["statifier_persistence.duration"])
+
+      # One attribute per outcome of the mode, the zeros included.
+      # sabotage: the stop clause closes with the metadata's attributes
+      # alone (measurements passed as %{}) -> red (no count attribute)
+      assert attributes["statifier_persistence.migrated"] == 2
+      assert attributes["statifier_persistence.refused"] == 0
+      assert attributes["statifier_persistence.parked"] == 0
+      assert attributes["statifier_persistence.skipped"] == 0
+      refute Map.has_key?(attributes, "statifier_persistence.monotonic_time")
+    end
+
+    # sabotage: the point clause hosts on :detached instead of
+    # {:process, self()} -> red (each migrated execution becomes a root
+    # span of its own and the batch span carries no event)
+    test "each migrated execution lands as a span event on the batch span" do
+      loans = two_loans()
+
+      assert {:ok, _report} = migrate_batch(loans, [])
+
+      spans = drain_spans()
+      assert [batch] = named(spans, "statifier_persistence.execution.migrate_batch")
+      assert named(spans, "statifier_persistence.execution.migrated") == []
+
+      migrated =
+        for {"statifier_persistence.execution.migrated", attributes} <- span_events(batch),
+            do: attributes["statifier_persistence.execution_id"]
+
+      assert Enum.sort(migrated) == ["loan-a", "loan-b"]
+    end
+
+    # The lock and adapter-call spans each execution's turn opens nest
+    # inside the batch span, by the table rule a step span already obeys.
+    # sabotage: open_span/6 records the span under a fresh pid instead of
+    # the emitting one -> red (the interval spans find no enclosing span
+    # and root their own traces)
+    test "the spans each execution's turn opens nest inside the batch span" do
+      loans = two_loans()
+
+      assert {:ok, _report} = migrate_batch(loans, [])
+
+      spans = drain_spans()
+      assert [batch] = named(spans, "statifier_persistence.execution.migrate_batch")
+      batch_id = span(batch, :span_id)
+
+      inner =
+        named(spans, "statifier_persistence.execution.lock") ++
+          named(spans, "statifier_persistence.adapter.call")
+
+      assert inner != []
+      assert Enum.all?(inner, &(span(&1, :parent_span_id) == batch_id))
+      assert Enum.all?(inner, &(span(&1, :trace_id) == span(batch, :trace_id)))
+    end
+
+    # sabotage: :migrate_batch removed from @paired_seams -> red (no
+    # batch span is exported for the dry run)
+    test "a dry run's span carries dry_run true, its counts, and no migrated event" do
+      loans = two_loans()
+
+      assert {:ok, %{counts: counts}} = migrate_batch(loans, dry_run: true)
+      assert counts == %{would_migrate: 2, would_refuse: 0, skipped: 0}
+
+      spans = drain_spans()
+      assert [batch] = named(spans, "statifier_persistence.execution.migrate_batch")
+      assert named(spans, "statifier_persistence.execution.migrated") == []
+
+      attributes = SpanCapture.attributes(span(batch, :attributes))
+      assert attributes["statifier_persistence.dry_run"] == true
+      assert attributes["statifier_persistence.would_migrate"] == 2
+      assert attributes["statifier_persistence.would_refuse"] == 0
+      assert attributes["statifier_persistence.skipped"] == 0
+      refute Map.has_key?(attributes, "statifier_persistence.migrated")
+
+      refute Enum.any?(
+               span_events(batch),
+               &match?({"statifier_persistence.execution.migrated", _attributes}, &1)
+             )
+    end
+
+    # A whole-batch refusal closes through `:stop` with `outcome: :error`,
+    # the refusal as `reason` and every count of the mode at zero.
+    # sabotage: the stop clause's guard narrowed to `seam == :step` -> red
+    # (the refusal's close falls to the catch-all and the span never ends)
+    test "a batch refused whole closes with its reason and every count at zero" do
+      span_ref = make_ref()
+      emit_batch_start(span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :migrate_batch, :stop],
+        %{
+          duration: 900,
+          monotonic_time: System.monotonic_time(),
+          migrated: 0,
+          refused: 0,
+          parked: 0,
+          skipped: 0
+        },
+        %{
+          from: "loan-v1",
+          to: "loan-v2",
+          dry_run: false,
+          span_ref: span_ref,
+          outcome: :error,
+          reason: :content_hash_query_unsupported
+        }
+      )
+
+      assert_receive {:span, batch}
+      assert span(batch, :name) == "statifier_persistence.execution.migrate_batch"
+      assert span(batch, :status) == :undefined
+
+      attributes = SpanCapture.attributes(span(batch, :attributes))
+      assert attributes["statifier_persistence.outcome"] == "error"
+      assert attributes["statifier_persistence.reason"] == "content_hash_query_unsupported"
+
+      assert Map.take(attributes, [
+               "statifier_persistence.migrated",
+               "statifier_persistence.refused",
+               "statifier_persistence.parked",
+               "statifier_persistence.skipped"
+             ]) == %{
+               "statifier_persistence.migrated" => 0,
+               "statifier_persistence.refused" => 0,
+               "statifier_persistence.parked" => 0,
+               "statifier_persistence.skipped" => 0
+             }
+    end
+
+    # sabotage: the exception clause's guard narrowed to `seam == :step`
+    # -> red (the batch span stays open and nothing is exported)
+    test "a batch exception fails the span with an error status and an exception event", %{
+      table: table
+    } do
+      span_ref = make_ref()
+      emit_batch_start(span_ref)
+
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :migrate_batch, :exception],
+        %{duration: 500, monotonic_time: System.monotonic_time()},
+        %{
+          from: "loan-v1",
+          to: "loan-v2",
+          dry_run: false,
+          span_ref: span_ref,
+          kind: :error,
+          reason: RuntimeError,
+          stacktrace: [{Some.Transform, :run, 2, [file: ~c"lib/some.ex", line: 7]}]
+        }
+      )
+
+      assert_receive {:span, batch}
+      assert span(batch, :name) == "statifier_persistence.execution.migrate_batch"
+      assert {:status, :error, "error: RuntimeError"} = span(batch, :status)
+
+      assert [{"exception", exception}] = span_events(batch)
+      assert exception["exception.type"] == "Elixir.RuntimeError"
+
+      attributes = SpanCapture.attributes(span(batch, :attributes))
+      assert attributes["statifier_persistence.kind"] == "error"
+      assert attributes["statifier_persistence.dry_run"] == false
+      assert :error = SpanTable.take_sibling_span(table, span_ref)
     end
   end
 

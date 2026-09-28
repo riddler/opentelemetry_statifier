@@ -14,9 +14,9 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   Three shapes, decided by the contract rather than by this module
   (`statifier_persistence`'s `docs/telemetry.md`):
 
-    * the step seam is a pair, and becomes a span: `:start` opens it and
-      exactly one of `:stop` or `:exception` closes it, the latter with an
-      error status;
+    * the step seam and the batch migration seam are pairs, and each
+      becomes a span: `:start` opens it and exactly one of `:stop` or
+      `:exception` closes it, the latter with an error status;
     * `[..., :adapter, :call]` and `[..., :execution, :lock]` are points that
       carry a `duration`, and become spans back-dated by it;
     * everything else is a point, and becomes a span event on the step
@@ -38,22 +38,31 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
 
   @mapping Sibling.mapping("statifier_persistence", :session_id)
 
+  # The family's two paired seams (ADR-0004's 2026-09-28 Amendment): the
+  # step, and the batch migration `migrate_batch/3` brackets. Both pair on
+  # `span_ref` and close the same way, so one set of clauses serves both.
+  @paired_seams [:step, :migrate_batch]
+
   @spec handle_event(:telemetry.event_name(), map(), map(), Config.t()) :: :ok
 
-  # The step span: the interval this package owns and nothing else
-  # measures. `span_ref` pairs the halves - never `execution_id`, which a
-  # parent creating a durable child inside its own step has two of open
-  # at once, exactly as st-ADR-0039 re-entry does upstream.
+  # A paired span. The step is the interval this package owns and nothing
+  # else measures; the batch migration is the interval one
+  # `migrate_batch/3` call takes, and every execution it moves lands on it
+  # as a `migrated` span event, because that point fires on the calling
+  # process inside it. `span_ref` pairs the halves - never
+  # `execution_id`, which a parent creating a durable child inside its own
+  # step has two of open at once, exactly as st-ADR-0039 re-entry does
+  # upstream.
   def handle_event(
-        [:statifier_persistence, :execution, :step, :start],
+        [:statifier_persistence, :execution, seam, :start],
         %{monotonic_time: monotonic_time} = measurements,
         %{span_ref: span_ref} = metadata,
         %Config{} = config
       )
-      when is_reference(span_ref) and is_integer(monotonic_time) do
+      when seam in @paired_seams and is_reference(span_ref) and is_integer(monotonic_time) do
     Sibling.open_span(
       config,
-      "statifier_persistence.execution.step",
+      Sibling.name([:statifier_persistence, :execution, seam]),
       span_ref,
       self(),
       monotonic_time,
@@ -61,13 +70,16 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
     )
   end
 
+  # The close carries the stop's measurements as attributes: `duration`,
+  # and on the batch span one count per outcome of the mode, zeros
+  # included, by the measurement rule every other number takes.
   def handle_event(
-        [:statifier_persistence, :execution, :step, :stop],
+        [:statifier_persistence, :execution, seam, :stop],
         %{monotonic_time: monotonic_time} = measurements,
         %{span_ref: span_ref} = metadata,
         %Config{} = config
       )
-      when is_reference(span_ref) and is_integer(monotonic_time) do
+      when seam in @paired_seams and is_reference(span_ref) and is_integer(monotonic_time) do
     Sibling.close_span(
       config,
       span_ref,
@@ -76,21 +88,22 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
     )
   end
 
-  # The step span's other close. `:exception` replaces `:stop` when the
-  # drive raised, threw or exited, pairs on the same `span_ref`, and ends
-  # the span with an error status. `reason` is narrowed upstream to an
-  # atom, so the status message is bounded; `stacktrace` is a list and
-  # the attribute rules drop it, so it travels instead in the `exception`
-  # span event recorded on the span just before it ends. The close does
-  # what `Sibling.close_span/5` does, but here rather than through it,
-  # because the event has to land between the take and the end.
+  # A paired span's other close. `:exception` replaces `:stop` when the
+  # drive or the batch raised, threw or exited, pairs on the same
+  # `span_ref`, and ends the span with an error status. `reason` is
+  # narrowed upstream to an atom, so the status message is bounded;
+  # `stacktrace` is a list and the attribute rules drop it, so it travels
+  # instead in the `exception` span event recorded on the span just
+  # before it ends. The close does what `Sibling.close_span/5` does, but
+  # here rather than through it, because the event has to land between
+  # the take and the end.
   def handle_event(
-        [:statifier_persistence, :execution, :step, :exception],
+        [:statifier_persistence, :execution, seam, :exception],
         %{monotonic_time: monotonic_time} = measurements,
         %{span_ref: span_ref} = metadata,
         %Config{table: table} = config
       )
-      when is_reference(span_ref) and is_integer(monotonic_time) do
+      when seam in @paired_seams and is_reference(span_ref) and is_integer(monotonic_time) do
     case SpanTable.take_sibling_span(table, span_ref) do
       {:ok, %SiblingEntry{span_ctx: span_ctx}} ->
         OpenTelemetry.Span.set_attributes(span_ctx, attributes(measurements, metadata, config))
