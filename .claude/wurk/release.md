@@ -204,13 +204,14 @@ explicit on each:
   unauthorized **always**: "publishing is the operator's, in every campaign".
   Publishing (`mix hex.publish`, a docs republish included) is the operator's
   one release step, and no consent or relay delegates it.
-- *a version bump on a release bead's branch* - allowed only on "an
-  operator-authorized release bead, inside a campaign carrying the operator's
-  explicit consent", and still unauthorized "on any other bead, on main, or
-  when the operator has not named this repo's release bead".
+- *a version bump on a release bead's branch* - allowed only on "a release
+  bead the operator has named (in the campaign plan or their own words)", as
+  release prep and the family norm, "not a grant a campaign consent has to
+  name", and still unauthorized "on any other bead, on main, or when the
+  operator has not named this repo's release bead".
 
 So the one thing this recipe performs - the bump plus the step B promotion, on
-a named release bead's branch, under a campaign consent that names it - is
-release *prep*. `.claude/wurk/commit.md`'s version section records the same
-boundary from the commit side: the version field moves only through a release
-bead, never as a convenience.
+a release bead's branch the operator has named, in the campaign plan or in
+their own words - is release *prep*. `.claude/wurk/commit.md`'s version
+section records the same boundary from the commit side: the version field
+moves only through a release bead, never as a convenience.
