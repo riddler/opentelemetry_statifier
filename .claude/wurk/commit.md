@@ -59,10 +59,11 @@ stale the release after it is written.
 
 The boundary is `CLAUDE.md`'s authority table, which this file points at and
 does not restate. Its *version bump on a release bead's branch* row allows
-the bump only on an operator-authorized release bead inside a campaign
-carrying the operator's explicit consent. Its *tagging a release prep* row
-allows the tag only once the release bead's bump is merged to `origin/main`,
-naming that version at the merged commit, and its **Release preps**
+the bump only on a release bead the operator has named, in the campaign plan
+or in their own words; the **Release preps** paragraph calls that bump the
+family norm, not a grant a campaign consent has to name. Its *tagging a
+release prep* row allows the tag only once the release bead's bump is
+merged to `origin/main`, naming that version at the merged commit, and its **Release preps**
 paragraph says the conductor or the session that owns the release bead tags
 it. Its *release (`mix hex.publish`, GitHub release)* row allows those never:
 publishing is the operator's. So at ordinary
