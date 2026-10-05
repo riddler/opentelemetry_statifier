@@ -113,6 +113,7 @@ Call `OpentelemetryStatifier.teardown/0` to detach the bridge.
 - Learn
   - [Basic usage](#basic-usage): a loan executed with the bridge attached, and the four spans it exports.
 - Do
+  - [See a chart execution as a trace](docs/guides/how-to-see-a-chart-execution-as-a-trace.md): find one loan's execution in your tracing backend and follow its macrosteps from the first to the last.
   - [Trace the durable stepper's storage phases](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Persistence.html): the step span the macrosteps nest inside, and the batch migration span, in the API reference until a guide page exists.
   - [Trace delayed sends and invocations that ride Oban jobs](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Oban.html): which events land on the macrostep span and which become their own linked spans, in the API reference until a guide page exists.
   - [Nest macrosteps under your own durable stepper's span](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Parent.html): the scoped `within/3`, or `register/2` and `unregister/1`, in the API reference until a guide page exists.
