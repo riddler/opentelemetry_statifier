@@ -1,8 +1,8 @@
-defmodule OpentelemetryStatifier.ReadmeExampleTest.AuthorizeHandler do
+defmodule OpentelemetryStatifier.ReadmeExampleTest.HoldCheckHandler do
   @moduledoc """
-  The invoke handler the README's "Invoking an authorization service"
-  snippet shows, kept here so the snippet is executed rather than asserted
-  by eye.
+  The invoke handler behind the README's sentence on an `<invoke>` (a check
+  for holds on the copy before it goes out), kept here so what that sentence
+  says about the trace is executed rather than asserted by eye.
 
   `start/2`, `cancel/2` and `forward/3` are the pure planning half of
   `Statifier.Invoke.Handler`; `perform/2` is the impure half and receives
@@ -13,7 +13,7 @@ defmodule OpentelemetryStatifier.ReadmeExampleTest.AuthorizeHandler do
   @behaviour Statifier.Invoke.Handler
 
   @impl Statifier.Invoke.Handler
-  def start(invoke, _ctx), do: {:ok, [{:handler, __MODULE__, {:authorize, invoke.invoke_id}}]}
+  def start(invoke, _ctx), do: {:ok, [{:handler, __MODULE__, {:check_holds, invoke.invoke_id}}]}
 
   @impl Statifier.Invoke.Handler
   def cancel(_invoke_id, _ctx), do: {:ok, []}
@@ -22,23 +22,24 @@ defmodule OpentelemetryStatifier.ReadmeExampleTest.AuthorizeHandler do
   def forward(_invoke_id, _event, _ctx), do: {:ok, []}
 
   # Idempotent by contract: the session may call this more than once for the
-  # same invoke_id. Sending a real authorization request would happen here.
+  # same invoke_id. Asking the catalogue for holds would happen here.
   @impl Statifier.Invoke.Handler
-  def perform({:authorize, _invoke_id}, _ctx), do: :ok
+  def perform({:check_holds, _invoke_id}, _ctx), do: :ok
 end
 
 defmodule OpentelemetryStatifier.ReadmeExampleTest do
   @moduledoc """
-  Executes the README's worked examples end to end against a real
+  Executes the README's Basic usage snippet end to end against a real
   `Statifier.Session`, so a snippet that stops matching the library fails
-  the gate instead of going quietly stale.
+  the gate instead of going quietly stale. The chart is copied here, and a
+  guard test reads the README to prove the copy still matches it.
 
   This is the only place in the suite that drives the bridge through a live
   session rather than hand-emitted `:telemetry.execute/3` calls: the other
   test files exercise the mapping in isolation, this one proves the whole
   path from SCXML source to exported spans.
 
-  When the README's charts, snippets, or the span shapes it prints change,
+  When the README's chart, snippet, or the span shapes it prints change,
   change them here in the same commit.
   """
 
@@ -49,53 +50,52 @@ defmodule OpentelemetryStatifier.ReadmeExampleTest do
 
   import OpentelemetryStatifier.SpanCapture
 
-  alias OpentelemetryStatifier.ReadmeExampleTest.AuthorizeHandler
+  alias OpentelemetryStatifier.ReadmeExampleTest.HoldCheckHandler
   alias OpentelemetryStatifier.SpanCapture
   alias OpentelemetryStatifier.SpanTable
 
-  # Card processing, one of the family's two canonical example domains. Kept
-  # byte-for-byte in step with the README's "A worked example" chart.
-  @authorization_chart """
-  <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="idle">
-    <state id="idle">
-      <transition event="authorize.requested" target="authorizing"/>
+  # The library loan, the README's example world. Kept byte-for-byte in step
+  # with the chart inside the README's Basic usage snippet; the guard test
+  # below fails when the two part.
+  @loan_chart """
+  <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="on_shelf">
+    <state id="on_shelf">
+      <transition event="loan.checked_out" target="on_loan"/>
     </state>
-    <state id="authorizing">
+    <state id="on_loan">
       <onentry>
-        <log label="card" expr="'authorizing'"/>
+        <log label="loan" expr="'on loan'"/>
       </onentry>
-      <transition event="authorization.approved" target="authorized"/>
-      <transition event="authorization.declined" target="declined"/>
+      <transition event="loan.renewed" target="on_loan"/>
+      <transition event="loan.returned" target="returned"/>
+      <transition event="loan.lost" target="lost"/>
     </state>
-    <state id="authorized">
-      <transition event="capture.requested" target="captured"/>
-    </state>
-    <final id="captured"/>
-    <final id="declined"/>
+    <final id="returned"/>
+    <final id="lost"/>
   </scxml>
   """
 
-  # The same flow with the authorization delegated to a host-supplied
-  # invoke handler, as the README's invoke snippet shows.
+  # A loan whose check-out waits on a host-supplied invoke handler (a check
+  # for holds on the copy), for the README's sentence on an `<invoke>`.
   @invoking_chart """
-  <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="idle">
-    <state id="idle">
-      <transition event="authorize.requested" target="authorizing"/>
+  <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="on_shelf">
+    <state id="on_shelf">
+      <transition event="loan.requested" target="checking_holds"/>
     </state>
-    <state id="authorizing">
-      <invoke id="auth" type="myapp:authorize"/>
-      <transition event="done.invoke.auth" target="authorized"/>
+    <state id="checking_holds">
+      <invoke id="holds" type="myapp:check_holds"/>
+      <transition event="done.invoke.holds" target="on_loan"/>
     </state>
-    <state id="authorized">
-      <transition event="capture.requested" target="captured"/>
+    <state id="on_loan">
+      <transition event="loan.returned" target="returned"/>
     </state>
-    <final id="captured"/>
+    <final id="returned"/>
   </scxml>
   """
 
-  # Signup wizard with A/B testing, the family's other canonical example
-  # domain. Here for the cardinality point the README makes: the variant is
-  # chart vocabulary and lands in attributes, never in the span name.
+  # A fixture, not README text: a chart with two variant branches, kept for
+  # the cardinality rule (chart vocabulary lands in attributes, never in the
+  # span name).
   @signup_chart """
   <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" initial="assigning">
     <state id="assigning">
@@ -142,108 +142,151 @@ defmodule OpentelemetryStatifier.ReadmeExampleTest do
 
   defp link_count(captured), do: captured |> span(:links) |> SpanCapture.links() |> length()
 
+  # The one code block under the README's "## Basic usage" heading.
+  defp basic_usage_block do
+    [_, section] = String.split(File.read!("README.md"), "\n## Basic usage\n", parts: 2)
+    [section | _] = String.split(section, "\n## ", parts: 2)
+    [[block]] = Regex.scan(~r/^```elixir\n(.*?)^```$/ms, section, capture: :all_but_first)
+    block
+  end
+
+  # sabotage: the README's Basic usage chart gained a state the copy here
+  # lacks -> red
+  test "the README's Basic usage snippet carries the chart this file executes" do
+    block = basic_usage_block()
+
+    assert String.contains?(block, ~s(chart_source = """\n) <> @loan_chart <> ~s("""\n))
+
+    for line <- [
+          ~s{Statifier.Session.start_link(machine, session_id: "loan_42")},
+          ~s{Statifier.Session.send_event(session, "loan.checked_out")},
+          ~s{Statifier.Session.send_event(session, "loan.renewed")},
+          ~s{Statifier.Session.send_event(session, "loan.returned")}
+        ] do
+      assert String.contains?(block, line)
+    end
+  end
+
   # sabotage: Handler's macrostep span name changed to "statifier.step" ->
   # red (every span-name assertion below fails)
-  test "the README's authorization run emits one span per macrostep" do
-    {:ok, machine} = Statifier.compile(@authorization_chart)
-    {:ok, session} = Statifier.Session.start_link(machine, session_id: "sess_card")
+  test "the README's loan emits one span per macrostep" do
+    {:ok, machine} = Statifier.compile(@loan_chart)
+    {:ok, session} = Statifier.Session.start_link(machine, session_id: "loan_42")
 
-    :ok = Statifier.Session.send_event(session, "authorize.requested")
-    :ok = Statifier.Session.send_event(session, "authorization.approved")
-    :ok = Statifier.Session.send_event(session, "capture.requested")
+    :ok = Statifier.Session.send_event(session, "loan.checked_out")
+    :ok = Statifier.Session.send_event(session, "loan.renewed")
+    :ok = Statifier.Session.send_event(session, "loan.returned")
 
     # `send_event/2` is a cast; `status/1` is a call on the same process, so
     # it serializes behind all three and is the natural sync point.
     assert %{status: :done, configuration: configuration, macrostep: 4} =
              Statifier.Session.status(session)
 
-    assert configuration == MapSet.new(["captured"])
+    assert configuration == MapSet.new(["returned"])
 
     assert_receive {:span, initialize}
-    assert_receive {:span, authorizing}
-    assert_receive {:span, authorized}
-    assert_receive {:span, captured}
+    assert_receive {:span, checked_out}
+    assert_receive {:span, renewed}
+    assert_receive {:span, returned}
     refute_receive {:span, _}
 
     # Span-name cardinality is one, whatever the chart's vocabulary.
-    for captured_span <- [initialize, authorizing, authorized, captured] do
+    for captured_span <- [initialize, checked_out, renewed, returned] do
       assert span(captured_span, :name) == "statifier.macrostep"
+      assert %{"statifier.session_id" => "loan_42"} = attrs(captured_span)
     end
 
     # `statifier.driver` end to end: the real interpreter emits
     # `driver: :session` (st-ADR-0067 decision 4) and the bridge maps it, so
     # a backend tells a session-hosted macrostep from a durable one.
     assert %{
-             "statifier.session_id" => "sess_card",
              "statifier.trigger" => "initialize",
              "statifier.outcome" => "quiescent",
-             "statifier.configuration" => ["idle"],
+             "statifier.configuration" => ["on_shelf"],
              "statifier.macrostep" => 1,
              "statifier.driver" => "session"
            } = attrs(initialize)
 
+    assert event_names(initialize) == ["statifier.effect.datamodel_init"]
+
     # Each macrostep roots its own trace; the first has no predecessor to
     # link to and every later one links back to exactly one.
     assert link_count(initialize) == 0
-    assert link_count(authorizing) == 1
-    assert link_count(authorized) == 1
-    assert link_count(captured) == 1
+    assert link_count(checked_out) == 1
+    assert link_count(renewed) == 1
+    assert link_count(returned) == 1
 
     assert %{
              "statifier.trigger" => "event",
-             "statifier.event_name" => "authorize.requested",
-             "statifier.configuration" => ["authorizing"],
+             "statifier.event_name" => "loan.checked_out",
+             "statifier.configuration" => ["on_loan"],
              "statifier.macrostep" => 2
-           } = attrs(authorizing)
+           } = attrs(checked_out)
 
-    assert event_names(authorizing) == ["statifier.effect.log"]
+    assert event_names(checked_out) == ["statifier.effect.log"]
 
     assert %{
-             "statifier.label" => "card",
+             "statifier.label" => "loan",
              "statifier.source.line" => 7,
              "statifier.source.column" => 7
-           } = event_attrs(authorizing, "statifier.effect.log")
+           } = event_attrs(checked_out, "statifier.effect.log")
 
-    assert %{"statifier.outcome" => "done", "statifier.macrostep" => 4} = attrs(captured)
-    assert event_names(captured) == ["statifier.halt", "statifier.effect.done"]
+    # The renewal is an external self-transition: it leaves and re-enters
+    # on_loan, so the entry log fires again.
+    assert %{
+             "statifier.trigger" => "event",
+             "statifier.event_name" => "loan.renewed",
+             "statifier.configuration" => ["on_loan"]
+           } = attrs(renewed)
+
+    assert event_names(renewed) == ["statifier.effect.log"]
+
+    assert %{
+             "statifier.trigger" => "event",
+             "statifier.event_name" => "loan.returned",
+             "statifier.outcome" => "done",
+             "statifier.macrostep" => 4
+           } = attrs(returned)
+
+    assert event_names(returned) == ["statifier.halt", "statifier.effect.done"]
   end
 
   # sabotage: Attributes' @never_serialized gained :invoke_id, so the invoke
   # id stopped reaching an attribute -> red
-  test "the README's invoke snippet records invoke and cancel_invoke span events" do
+  test "the README's invoke sentence: invoke and cancel_invoke span events" do
     {:ok, machine} = Statifier.compile(@invoking_chart)
 
     {:ok, session} =
       Statifier.Session.start_link(machine,
-        session_id: "sess_card",
-        invoke_handlers: %{"myapp:authorize" => AuthorizeHandler}
+        session_id: "loan_43",
+        invoke_handlers: %{"myapp:check_holds" => HoldCheckHandler}
       )
 
-    :ok = Statifier.Session.send_event(session, "authorize.requested")
+    :ok = Statifier.Session.send_event(session, "loan.requested")
     assert %{configuration: configuration} = Statifier.Session.status(session)
-    assert configuration == MapSet.new(["authorizing"])
-    assert [%{invoke_id: "auth"}] = Statifier.Session.invocations(session)
+    assert configuration == MapSet.new(["checking_holds"])
+    assert [%{invoke_id: "holds"}] = Statifier.Session.invocations(session)
 
-    :ok = Statifier.Session.done_invocation(session, "auth", %{"code" => "approved"})
-    :ok = Statifier.Session.send_event(session, "capture.requested")
+    :ok = Statifier.Session.done_invocation(session, "holds", %{"holds" => 0})
+    :ok = Statifier.Session.send_event(session, "loan.returned")
     assert %{status: :done} = Statifier.Session.status(session)
 
     assert_receive {:span, _initialize}
-    assert_receive {:span, authorizing}
-    assert_receive {:span, authorized}
-    assert_receive {:span, _captured}
+    assert_receive {:span, checking_holds}
+    assert_receive {:span, on_loan}
+    assert_receive {:span, _returned}
 
-    assert event_names(authorizing) == ["statifier.effect.invoke"]
+    assert event_names(checking_holds) == ["statifier.effect.invoke"]
 
-    assert %{"statifier.invoke_id" => "auth"} =
-             event_attrs(authorizing, "statifier.effect.invoke")
+    assert %{"statifier.invoke_id" => "holds"} =
+             event_attrs(checking_holds, "statifier.effect.invoke")
 
     # Leaving the invoking state cancels the invocation, and that is a span
     # event on the macrostep that left it.
-    assert event_names(authorized) == ["statifier.effect.cancel_invoke"]
+    assert event_names(on_loan) == ["statifier.effect.cancel_invoke"]
 
-    assert %{"statifier.invoke_id" => "auth"} =
-             event_attrs(authorized, "statifier.effect.cancel_invoke")
+    assert %{"statifier.invoke_id" => "holds"} =
+             event_attrs(on_loan, "statifier.effect.cancel_invoke")
   end
 
   # sabotage: Handler's stop attributes renamed "statifier.configuration" to
