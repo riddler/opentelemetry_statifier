@@ -97,9 +97,10 @@ never one per state, and never one for the session.
 Every attribute sits under the `statifier.` namespace
 (`statifier.session_id` is `"loan_42"` on all four), and the `<log>` span
 event carries `statifier.source.line` and `statifier.source.column`, so it
-points at the line of the chart that produced it. The state and event names
-are attributes, not span names, so a backend sees one operation however
-large the chart grows. An `<invoke>`, such as a check for holds on the copy
+points at the line of the chart that produced it. Why the state and event
+names are attributes rather than span names is in
+[Why spans and links are shaped this way](docs/explanation/why-spans-and-links-are-shaped-this-way.md).
+An `<invoke>`, such as a check for holds on the copy
 before it goes out, shows up the same way: a `statifier.effect.invoke` span
 event on the macrostep that entered the invoking state, and
 `statifier.effect.cancel_invoke` on the one that left it; the invoked work
@@ -123,6 +124,7 @@ Call `OpentelemetryStatifier.teardown/0` to detach the bridge.
   - [The attribute mapping](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Attributes.html): how each measurement and metadata key becomes an attribute, and what is never exported.
   - [The changelog](https://github.com/riddler/opentelemetry_statifier/blob/main/CHANGELOG.md): what changed in each version.
 - Understand
+  - [Why spans and links are shaped this way](docs/explanation/why-spans-and-links-are-shaped-this-way.md): why each macrostep is one span and the root of its own trace, why links join macrosteps rather than parents, and the alternatives that lost.
   - [What the bridge produces](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.html): spans, span events and links for each macrostep, cleanup after a crash, and why the first span starts late.
   - [The span design](https://github.com/riddler/statifier-ex/blob/main/docs/opentelemetry.md): span topology, context propagation, attribute mapping, the cardinality policy and trace-off degradation, recorded in statifier-ex.
   - [The decision records](https://github.com/riddler/opentelemetry_statifier/tree/main/docs/adr): why the handler attaches per event, how the span table works, and why the sibling bridges are separate setup calls.
