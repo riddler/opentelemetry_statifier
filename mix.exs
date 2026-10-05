@@ -49,7 +49,14 @@ defmodule OpentelemetryStatifier.MixProject do
       canonical: "https://hexdocs.pm/opentelemetry_statifier",
       source_url: @source_url,
       main: "readme",
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "docs/guides/how-to-see-a-chart-execution-as-a-trace.md"
+      ],
+      groups_for_extras: [
+        "How-to guides": ~r{docs/guides/}
+      ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
     ]
   end
@@ -58,7 +65,12 @@ defmodule OpentelemetryStatifier.MixProject do
     [
       name: "opentelemetry_statifier",
       licenses: ["MIT"],
-      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md),
+      # A guide the README links by a relative path ships in the package, so
+      # the link resolves where hex.pm renders the README.
+      files: ~w(
+        lib mix.exs README.md LICENSE CHANGELOG.md
+        docs/guides/how-to-see-a-chart-execution-as-a-trace.md
+      ),
       links: %{
         "GitHub" => @source_url,
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
