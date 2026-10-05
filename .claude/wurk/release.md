@@ -200,10 +200,12 @@ explicit on each:
   who: once the prep is merged to `origin/main`, the conductor or the session
   that owns the release bead tags that merged commit with the new version and
   pushes the tag.
-- *a release (`mix hex.publish`, GitHub release)* - trigger **never**, still
-  unauthorized **always**: "publishing is the operator's, in every campaign".
-  Publishing (`mix hex.publish`, a docs republish included) is the operator's
-  one release step, and no consent or relay delegates it.
+- *a release (`mix hex.publish`, GitHub release)* - trigger **never** for an
+  agent or a session, still unauthorized **always**: an agent or a session
+  never runs `mix hex.publish` (a docs republish included); the release
+  workflow publishes on the tag push the tagging row already allows, and a
+  failed workflow is re-run from its Actions page, never worked round by a
+  local publish.
 - *a version bump on a release bead's branch* - allowed only on "a release
   bead the operator has named (in the campaign plan or their own words)", as
   release prep and the family norm, "not a grant a campaign consent has to
