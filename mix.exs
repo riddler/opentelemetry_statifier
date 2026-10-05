@@ -52,10 +52,12 @@ defmodule OpentelemetryStatifier.MixProject do
       extras: [
         "README.md",
         "CHANGELOG.md",
-        "docs/guides/how-to-see-a-chart-execution-as-a-trace.md"
+        "docs/guides/how-to-see-a-chart-execution-as-a-trace.md",
+        "docs/explanation/why-spans-and-links-are-shaped-this-way.md"
       ],
       groups_for_extras: [
-        "How-to guides": ~r{docs/guides/}
+        "How-to guides": ~r{docs/guides/},
+        Explanation: ~r{docs/explanation/}
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
     ]
@@ -70,6 +72,7 @@ defmodule OpentelemetryStatifier.MixProject do
       files: ~w(
         lib mix.exs README.md LICENSE CHANGELOG.md
         docs/guides/how-to-see-a-chart-execution-as-a-trace.md
+        docs/explanation/why-spans-and-links-are-shaped-this-way.md
       ),
       links: %{
         "GitHub" => @source_url,
