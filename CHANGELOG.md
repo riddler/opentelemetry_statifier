@@ -6,9 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Entries for unreleased work are not written here directly. Each issue drops a
-fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.9.0/changelog.d/README.md); the fragments are assembled
+fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.9.1/changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
+
+## [0.9.1] 2026-10-05
+
+Patch release: documentation only. No module, function, event or attribute
+changes; the published docs gain two pages, a sidebar grouped by kind of
+page, and a README rewritten as an introduction.
+
+### Added
+
+- A how-to guide, "How to see a chart execution as a trace", published in the docs and shipped in the package: find one chart execution in a tracing backend, follow its macrostep spans by their links, and read a macrostep's span events.
+- An explanation page, "Why spans and links are shaped this way", published in the docs and shipped in the package: why each macrostep is one span and the root of its own trace, and why links stitch an execution together.
+
+### Changed
+
+- The HexDocs sidebar groups the extra pages by kind of page, under "How-to guides" and "Explanation".
+- The README is rewritten as an introduction: what the package is, why it exists, the install pin, one basic-usage example of a library loan with the spans it exports, and a Documentation map grouped by Learn, Do, Look up and Understand. The longer integration walkthroughs it carried now live behind links to the module pages that document them.
 
 ## [0.9.0] 2026-09-28
 
