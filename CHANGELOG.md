@@ -6,9 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Entries for unreleased work are not written here directly. Each issue drops a
-fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.9.1/changelog.d/README.md); the fragments are assembled
+fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.9.2/changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
+
+## [0.9.2] 2026-10-08
+
+Patch release: documentation only. No module, function, event or attribute
+changes; the published docs gain a page on upgrading a host from 0.6 to
+0.9.
+
+### Added
+
+- An "Upgrading a host from 0.6 to 0.9" page, published in the docs under an "Upgrading" group and shipped in the package: what a host changes for each minor from 0.6 to 0.9 and for the 0.9.1 patch, saying NONE where a host changes nothing.
+
+### Changed
+
+- The README's Documentation map links the upgrading page.
 
 ## [0.9.1] 2026-10-05
 
