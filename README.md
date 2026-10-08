@@ -119,6 +119,7 @@ Call `OpentelemetryStatifier.teardown/0` to detach the bridge.
   - [Trace delayed sends and invocations that ride Oban jobs](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Oban.html): which events land on the macrostep span and which become their own linked spans, in the API reference until a guide page exists.
   - [Nest macrosteps under your own durable stepper's span](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Parent.html): the scoped `within/3`, or `register/2` and `unregister/1`, in the API reference until a guide page exists.
   - [Stamp trace ids onto a statifier_ui trace stream](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.SpanContext.html): the lookup to hand the subscriber as its `:otel_context` producer, in the API reference until a guide page exists.
+  - [Upgrade a host](docs/upgrading.md): what a host changes for each minor from 0.6 to 0.9.
 - Look up
   - [setup/1](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.html#setup/1): what attaching does, and what an invalid option returns.
   - [The attribute mapping](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Attributes.html): how each measurement and metadata key becomes an attribute, and what is never exported.
