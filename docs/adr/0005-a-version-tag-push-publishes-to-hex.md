@@ -1,6 +1,6 @@
 # ADR-0005: A version tag push publishes to Hex, through a release workflow
 
-Status: proposed (2026-10-04)
+Status: accepted (2026-10-10, opentelemetry_statifier 0.9.1)
 
 ## Context
 
@@ -114,3 +114,40 @@ workflow publishes is, for this repository, permanent.
   steps is made in `release.yml` in the same change.
 - This record stays proposed until a version of this package has been
   published through the workflow.
+
+## Note, 2026-10-10: accepted on the first publish through the workflow
+
+The condition the last Consequences bullet names is met: a version of this
+package has been published through the workflow. The Status line above is
+flipped in place; nothing else in the record is reworded, and that bullet
+stays as written, met here.
+
+- The first publish through the workflow: opentelemetry_statifier 0.9.1,
+  tag `v0.9.1` at `0749691b`, the workflow run's URL
+  https://github.com/riddler/opentelemetry_statifier/actions/runs/37310128818
+  (a tag push, succeeded on its first attempt). hex.pm and HexDocs both show
+  0.9.1.
+- The later publish through the workflow: 0.9.2, tag `v0.9.2` at
+  `2b7b55d2`, run
+  https://github.com/riddler/opentelemetry_statifier/actions/runs/37747879056.
+- Every claim the record makes was re-verified at `2b7b55d2`, `origin/main`
+  on the day of the flip. Decisions 1, 2, 4 and 5 against
+  `.github/workflows/release.yml`: the trigger, the token, the concurrency
+  group, the three checks ahead of the toolchain, the publish step with the
+  key in that step's environment alone, and the address step. Decision 3
+  against `.github/workflows/ci.yml`, whose toolchain, cache, fetch and gate
+  steps the release workflow carries unchanged, and against `gate.full` in
+  `.claude/wurk.json` (`mix quality`). Decision 6 against the same file: it
+  configures no retry. The Consequences' first two bullets against
+  `CLAUDE.md` (the release and tagging rows and the "Release preps"
+  paragraph) and `.claude/wurk/release.md`. The Context's account of the hand
+  publish is a statement about `94d2ace` and still reads true there.
+  Decision 7 states Hex's policy rather than this repository's code.
+- No commit after `v0.9.1` touched either workflow file, `CLAUDE.md`,
+  `.claude/wurk.json` or `.claude/wurk/release.md`. The two that touched
+  `mix.exs` moved the version and the docs extras, which the record does not
+  cite.
+
+The flip on the first workflow publish, with that run and its commit as the
+evidence, was ruled by the operator, 2026-10-06; this Note's wording was
+decided by the conductor under a standing consent, 2026-10-10.
