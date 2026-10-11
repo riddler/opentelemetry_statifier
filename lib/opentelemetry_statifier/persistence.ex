@@ -213,6 +213,11 @@ defmodule OpentelemetryStatifier.Persistence do
   module owns are detached before they are attached, so a second call
   replaces the first attachment. The two setups are independent - this one
   detaches and attaches nothing outside its own family.
+
+  The `:adapter_calls` option is `:nested_only` (the default) or `:all`.
+  With `:nested_only`, a `statifier_persistence.adapter.call` span is
+  emitted only inside an enclosing span; with `:all`, every adapter call
+  span is emitted.
   """
   @spec setup(keyword()) :: :ok | {:error, term()}
   def setup(opts) do
