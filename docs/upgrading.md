@@ -1,8 +1,8 @@
-# Upgrading a host from 0.6 to 0.9
+# Upgrading a host from 0.6 to 0.10
 
 This page says what a host changes to move `opentelemetry_statifier` from
-0.6.0 to 0.9.1, one minor at a time: 0.6 to 0.7, 0.7 to 0.8 and 0.8 to
-0.9, then the 0.9.1 patch. A host here is the code that embeds the
+0.6.0 to 0.10.0, one minor at a time: 0.6 to 0.7, 0.7 to 0.8 and 0.8 to
+0.9, the 0.9.1 and 0.9.2 patches, then 0.9 to 0.10. A host here is the code that embeds the
 package: its calls to `OpentelemetryStatifier.setup/1`,
 `OpentelemetryStatifier.Persistence.setup/0,1` and
 `OpentelemetryStatifier.Oban.setup/0,1`, and the saved queries, dashboards
@@ -12,10 +12,12 @@ lists only what a host has to do about it, and says **NONE** where the
 answer is nothing.
 
 Move the pin with each minor, as the README recommends:
-`{:opentelemetry_statifier, "~> 0.9.0"}`. The package's requirements
+`{:opentelemetry_statifier, "~> 0.10.0"}`. The package's requirements
 (`statifier ~> 2.4`, `opentelemetry_api ~> 1.4`, `telemetry ~> 1.0`) are
-the same on every step of this page, and so are `setup/1` and its options:
-`record_datamodel_values` still defaults to `false`. The `Persistence` and
+the same on every step of this page, and so are `setup/1` and its options
+through 0.9: `record_datamodel_values` still defaults to `false`. 0.10
+adds one option, `adapter_calls`, which only
+`OpentelemetryStatifier.Persistence.setup/1` reads (its section below). The `Persistence` and
 `Oban` bridges still take no dependency on `statifier_persistence` or
 `statifier_oban`. Each attaches to the names its own `events/0` lists, so
 a name the host's release of the sibling does not emit is never heard, and
@@ -127,3 +129,27 @@ May start doing:
 
 Must change: **NONE**. 0.9.1 is documentation only: no module, function,
 event or attribute changes.
+
+## 0.9.1 to 0.9.2
+
+Must change: **NONE**. 0.9.2 is documentation only: no module, function,
+event or attribute changes.
+
+## 0.9 to 0.10
+
+0.10.0 adds a setup option to `OpentelemetryStatifier.Persistence`,
+`adapter_calls: :nested_only | :all`, which chooses whether a
+`statifier_persistence.adapter.call` span is emitted only inside an
+enclosing span (`:nested_only`) or for every adapter call (`:all`). The
+default is `:nested_only`. No event, span name or attribute changes, and
+an adapter call span inside an enclosing span is exported as at 0.9.
+
+Must change: **NONE** for a host with no query, dashboard or alert that
+finds root `statifier_persistence.adapter.call` spans.
+
+- **If your queries, dashboards or alerts find root
+  `statifier_persistence.adapter.call` spans**, they find fewer: under the
+  new default, `adapter_calls: :nested_only`, adapter call spans outside an
+  enclosing span are no longer emitted. Pass `adapter_calls: :all` to
+  `OpentelemetryStatifier.Persistence.setup/1` to keep every adapter call
+  span, as 0.9 exported them.
