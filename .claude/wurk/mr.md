@@ -5,17 +5,21 @@ Project facts and one rule that constrains a generic step. See
 
 ## bd dolt push is the conductor's inside a cross-repo campaign
 
-The generic skill's `bd dolt push` step is **not run** when this repo is
-being worked as part of a cross-repo campaign over the statifier family. The
-authority table in `CLAUDE.md` already records why: the campaign's conductor
-pushes the mirrored trackers atomically, and a per-repo push from inside one
-repo's pipeline can interleave with pushes to the paired trackers and leave
-`mirrors:` halves pointing at states the other side has not seen.
+The generic skill's `bd dolt push` step runs only as the `bd dolt push`
+row in `CLAUDE.md`'s authority table allows; this section restates that
+row and grants nothing beyond it. The push is allowed once bead state has
+changed locally **and** the git side of the same change has already
+reached `origin`. Inside a cross-repo campaign over the statifier family,
+the campaign's conductor pushes, atomically across the campaign's
+trackers: a per-repo push from inside one repo's pipeline can interleave
+with pushes to the paired trackers and leave `mirrors:` halves pointing at
+states the other side has not seen. A push is never a way to publish beads
+for work that is not on `origin/main` yet.
 
 So: inside a campaign, record the request URL on the bead with `bd note` /
 `bd update` locally and leave the dolt push to the conductor. Outside a
-campaign, `bd dolt push` is the operator's call, as the table says - ask,
-do not assume.
+campaign, the row's trigger and its "still unauthorized" column are the
+whole test.
 
 ## Push and request authority: consent-scoped
 
