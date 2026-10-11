@@ -35,7 +35,7 @@ Add `opentelemetry_statifier` to the dependencies in your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:opentelemetry_statifier, "~> 0.9.0"}
+    {:opentelemetry_statifier, "~> 0.10.0"}
   ]
 end
 ```
