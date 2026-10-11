@@ -18,7 +18,9 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
       becomes a span: `:start` opens it and exactly one of `:stop` or
       `:exception` closes it, the latter with an error status;
     * `[..., :adapter, :call]` and `[..., :execution, :lock]` are points that
-      carry a `duration`, and become spans back-dated by it;
+      carry a `duration`, and become spans back-dated by it, an adapter
+      call only inside an enclosing span unless the config's
+      `adapter_calls` is `:all`;
     * everything else is a point, and becomes a span event on the paired
       span open around it (the step or the batch) -
       `[..., :step, :reentered]` included, which has four segments but
@@ -147,13 +149,38 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   # the span is back-dated by `duration` - the contrib family's usual
   # shape, and the only one available for an event that reports an
   # interval rather than bracketing one.
+  #
+  # Under `adapter_calls: :nested_only`, the default, an adapter call with
+  # nothing enclosing it in this process emits no span: it would otherwise
+  # be a root of its own, and the probes and reads a durable driver makes
+  # between steps are most of a fan-out's adapter calls. The lock wait is
+  # not filtered.
   def handle_event(
-        [:statifier_persistence, phase, kind] = event,
+        [:statifier_persistence, :adapter, :call] = event,
         %{duration: duration} = measurements,
         metadata,
         %Config{} = config
       )
-      when is_integer(duration) and {phase, kind} in [{:adapter, :call}, {:execution, :lock}] do
+      when is_integer(duration) do
+    if emit_adapter_call?(config) do
+      Sibling.interval_span(
+        config,
+        Sibling.name(event),
+        duration,
+        attributes(measurements, metadata, config)
+      )
+    else
+      :ok
+    end
+  end
+
+  def handle_event(
+        [:statifier_persistence, :execution, :lock] = event,
+        %{duration: duration} = measurements,
+        metadata,
+        %Config{} = config
+      )
+      when is_integer(duration) do
     Sibling.interval_span(
       config,
       Sibling.name(event),
@@ -188,6 +215,16 @@ defmodule OpentelemetryStatifier.Persistence.Handler do
   end
 
   def handle_event(_event, _measurements, _metadata, _config), do: :ok
+
+  # Enclosed means the lookup `Sibling.interval_span/4` takes its parent
+  # from answers: a step or batch migration span this bridge opened in
+  # this process, or a span a host declared here through
+  # `OpentelemetryStatifier.Parent`.
+  @spec emit_adapter_call?(Config.t()) :: boolean()
+  defp emit_adapter_call?(%Config{adapter_calls: :all}), do: true
+
+  defp emit_adapter_call?(%Config{table: table}),
+    do: match?({:ok, _ctx}, SpanTable.fetch_enclosing_ctx(table, self()))
 
   @spec attributes(map(), map(), Config.t()) :: map()
   defp attributes(measurements, metadata, config) do

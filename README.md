@@ -122,6 +122,7 @@ Call `OpentelemetryStatifier.teardown/0` to detach the bridge.
   - [Upgrade a host](docs/upgrading.md): what a host changes for each minor from 0.6 to 0.9.
 - Look up
   - [setup/1](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.html#setup/1): what attaching does, and what an invalid option returns.
+  - [Persistence.setup/1](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Persistence.html#setup/1): the `adapter_calls` option, `:nested_only` (the default: an adapter call span is emitted only inside an enclosing span) or `:all` (every adapter call span).
   - [The attribute mapping](https://hexdocs.pm/opentelemetry_statifier/OpentelemetryStatifier.Attributes.html): how each measurement and metadata key becomes an attribute, and what is never exported.
   - [The changelog](https://github.com/riddler/opentelemetry_statifier/blob/main/CHANGELOG.md): what changed in each version.
 - Understand

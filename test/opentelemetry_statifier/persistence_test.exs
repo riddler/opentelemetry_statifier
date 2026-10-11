@@ -6,6 +6,8 @@ defmodule OpentelemetryStatifier.PersistenceTest do
 
   import OpentelemetryStatifier.SpanCapture
 
+  require OpenTelemetry.Tracer
+
   alias OpentelemetryStatifier.{Persistence, SpanCapture, SpanTable}
   alias OpentelemetryStatifier.Persistence.Handler
   alias StatifierPersistence.{Executions, Storage}
@@ -924,6 +926,133 @@ defmodule OpentelemetryStatifier.PersistenceTest do
       assert attributes["statifier_persistence.kind"] == "error"
       assert attributes["statifier_persistence.dry_run"] == false
       assert :error = SpanTable.take_sibling_span(table, span_ref)
+    end
+  end
+
+  describe "the adapter_calls option" do
+    defp emit_adapter_call(callback, execution_id) do
+      :telemetry.execute(
+        [:statifier_persistence, :adapter, :call],
+        %{duration: 1_000, system_time: System.system_time()},
+        %{
+          adapter: StatifierPersistence.Storage.Adapter.InMemory,
+          callback: callback,
+          outcome: :ok,
+          reason: nil,
+          execution_id: execution_id
+        }
+      )
+    end
+
+    defp emit_lock(execution_id) do
+      :telemetry.execute(
+        [:statifier_persistence, :execution, :lock],
+        %{duration: 1_000, system_time: System.system_time()},
+        %{execution_id: execution_id}
+      )
+    end
+
+    # A fan-out's shape, from synthetic emits: each of three chunk
+    # executions is probed and initialised outside any step, then read
+    # inside its own step. A lock wait outside any step goes last, as a
+    # sentinel: the exporter delivers in order, so once it arrives every
+    # span emitted before it has too.
+    defp fan_out_spans do
+      for index <- 1..3 do
+        execution_id = "loan-#{index}"
+        emit_adapter_call(:supports_metadata?, execution_id)
+        emit_adapter_call(:init, execution_id)
+
+        step_ref = make_ref()
+        emit_step_start(execution_id, step_ref)
+        emit_adapter_call(:fetch_position, execution_id)
+        emit_step_stop(execution_id, step_ref)
+      end
+
+      emit_lock("loan-sentinel")
+      collect_until_lock([])
+    end
+
+    defp collect_until_lock(acc) do
+      assert_receive {:span, captured}, 1_000
+
+      if span(captured, :name) == "statifier_persistence.execution.lock",
+        do: Enum.reverse([captured | acc]),
+        else: collect_until_lock([captured | acc])
+    end
+
+    defp adapter_calls(spans),
+      do: Enum.filter(spans, &(span(&1, :name) == "statifier_persistence.adapter.call"))
+
+    defp roots(spans), do: Enum.filter(spans, &(span(&1, :parent_span_id) == :undefined))
+
+    # sabotage: emit_adapter_call?/1 answers true for :nested_only -> red
+    # (the six probes outside a step become root spans)
+    test "under the default a fan-out's adapter calls are spans only inside a step" do
+      spans = fan_out_spans()
+
+      step_ids =
+        for s <- spans,
+            span(s, :name) == "statifier_persistence.execution.step",
+            do: span(s, :span_id)
+
+      calls = adapter_calls(spans)
+
+      assert length(step_ids) == 3
+      assert length(calls) == 3
+      assert roots(calls) == []
+      assert Enum.all?(calls, &(span(&1, :parent_span_id) in step_ids))
+    end
+
+    # sabotage: the `adapter_calls: :all` clause of emit_adapter_call?/1
+    # deleted -> red (only the three calls inside a step are spans)
+    test "with adapter_calls: :all every adapter call is a span, the probes as roots", %{
+      table: table
+    } do
+      :ok = Persistence.setup(table: table, adapter_calls: :all)
+
+      calls = adapter_calls(fan_out_spans())
+
+      assert length(calls) == 9
+      assert length(roots(calls)) == 6
+    end
+
+    # sabotage: emit_adapter_call?/1 asks SpanTable.fetch_innermost_sibling_span/2
+    # instead of fetch_enclosing_ctx/2 -> red (a declared parent no longer
+    # encloses the call, and no span is emitted)
+    test "under the default an adapter call inside a declared parent is a span", %{
+      table: table
+    } do
+      declared = OpenTelemetry.Tracer.start_span(OpenTelemetry.Ctx.new(), "host.step", %{})
+      {:ok, registration} = OpentelemetryStatifier.Parent.register(declared, table: table)
+
+      emit_adapter_call(:fetch_position, "loan-parented")
+      :ok = OpentelemetryStatifier.Parent.unregister(registration)
+
+      assert_receive {:span, call}, 1_000
+      assert span(call, :name) == "statifier_persistence.adapter.call"
+      assert span(call, :parent_span_id) == OpenTelemetry.Span.span_id(declared)
+    end
+
+    # sabotage: the lock clause routed through emit_adapter_call?/1 -> red
+    # (a lock wait outside a step emits no span)
+    test "under the default a lock wait outside a step is still a span" do
+      emit_lock("loan-unlocked")
+
+      assert_receive {:span, lock}, 1_000
+      assert span(lock, :name) == "statifier_persistence.execution.lock"
+      assert span(lock, :parent_span_id) == :undefined
+    end
+
+    # sabotage: valid_value?(:adapter_calls, _) answers true -> red (the
+    # value is accepted and the handlers attach)
+    test "a value other than :nested_only or :all is refused and attaches nothing" do
+      :ok = Persistence.teardown()
+
+      assert {:error, {:invalid_option, :adapter_calls, :nested}} =
+               Persistence.setup(adapter_calls: :nested)
+
+      assert :telemetry.list_handlers([:statifier_persistence, :adapter, :call]) == []
     end
   end
 

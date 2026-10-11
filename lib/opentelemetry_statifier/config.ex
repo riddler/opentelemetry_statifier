@@ -6,7 +6,7 @@ defmodule OpentelemetryStatifier.Config do
   `:telemetry.attach/4` as each handler's `Config` argument (the family's
   pattern for setup-time options).
 
-  Two keys are recognised:
+  Three keys are recognised:
 
     * `:record_datamodel_values` - defaults to `false`. When `true`,
       `OpentelemetryStatifier.Attributes` records the datamodel values an
@@ -20,20 +20,26 @@ defmodule OpentelemetryStatifier.Config do
       table that already exists, created with
       `OpentelemetryStatifier.SpanTable.new_table/1`; the timed sweep runs
       over the default table only.
+    * `:adapter_calls` - `:nested_only` (the default) or `:all`. With
+      `:nested_only`, an adapter call span is emitted only inside an
+      enclosing span; with `:all`, every adapter call span is emitted.
+      Only `OpentelemetryStatifier.Persistence.setup/1` reads it.
 
   An unknown key is rejected rather than ignored: a typo'd
   `record_datamodel_value` silently doing nothing is exactly the failure
   the project's cardinality policy cannot afford.
   """
 
-  @keys [:record_datamodel_values, :table]
+  @keys [:record_datamodel_values, :table, :adapter_calls]
 
   defstruct record_datamodel_values: false,
-            table: OpentelemetryStatifier.SpanTable
+            table: OpentelemetryStatifier.SpanTable,
+            adapter_calls: :nested_only
 
   @type t :: %__MODULE__{
           record_datamodel_values: boolean(),
-          table: atom()
+          table: atom(),
+          adapter_calls: :nested_only | :all
         }
 
   @doc """
@@ -41,7 +47,8 @@ defmodule OpentelemetryStatifier.Config do
 
   Returns `{:error, {:invalid_options, :not_a_keyword_list}}` when `opts` is
   not even a keyword list, `{:error, {:unknown_options, keys}}` when it
-  contains keys outside `:record_datamodel_values`/`:table`, and
+  contains keys outside `:record_datamodel_values`, `:table` and
+  `:adapter_calls`, and
   `{:error, {:invalid_option, key, value}}` when a recognised key holds a
   value of the wrong shape.
   """
@@ -83,4 +90,5 @@ defmodule OpentelemetryStatifier.Config do
 
   defp valid_value?(:record_datamodel_values, value), do: is_boolean(value)
   defp valid_value?(:table, value), do: is_atom(value) and value != nil
+  defp valid_value?(:adapter_calls, value), do: value in [:nested_only, :all]
 end
