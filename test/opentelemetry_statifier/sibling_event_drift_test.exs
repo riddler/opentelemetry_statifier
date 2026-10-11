@@ -38,8 +38,9 @@ defmodule OpentelemetryStatifier.SiblingEventDriftTest do
     # lock resolves, so the release is pinned here: the list this package
     # bridges is 0.20's, the first release to emit the batch migration
     # span, and a lock walked back to 0.19 would pass them against a
-    # shorter contract. mix.exs admits 0.19 still; it is an `only: :test`
-    # requirement no host sees, and this assertion is the floor.
+    # shorter contract. mix.exs requires ~> 0.20 to match; it is an
+    # `only: :test` requirement no host sees, and this assertion holds the
+    # floor if that line is ever walked back.
     #
     # sabotage: mix.lock walked back to statifier_persistence 0.19.0 ->
     # red
