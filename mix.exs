@@ -105,7 +105,7 @@ defmodule OpentelemetryStatifier.MixProject do
       {:statifier_oban, "~> 0.15", only: :test, runtime: false},
 
       # Dev / test
-      {:ex_quality, "~> 0.15", only: :dev, runtime: false},
+      {:ex_quality, "~> 0.16", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
