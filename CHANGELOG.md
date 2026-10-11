@@ -6,9 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Entries for unreleased work are not written here directly. Each issue drops a
-fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.9.2/changelog.d/README.md); the fragments are assembled
+fragment in [`changelog.d/`](https://github.com/riddler/opentelemetry_statifier/blob/v0.10.0/changelog.d/README.md); the fragments are assembled
 into a version section at release. See that README for the format and for when a
 change warrants an entry at all.
+
+## [0.10.0] 2026-10-11
+
+Minor release: a setup option on the persistence bridge chooses which
+adapter call spans are emitted, and by default an adapter call span is
+emitted only inside an enclosing span.
+
+### Added
+
+- A setup option, `adapter_calls: :nested_only | :all`, chooses whether a `statifier_persistence.adapter.call` span is emitted only inside an enclosing span (`:nested_only`) or for every adapter call (`:all`).
+
+### Changed
+
+- Adapter call spans outside an enclosing span are no longer emitted under the default option, `adapter_calls: :nested_only`; pass `adapter_calls: :all` to `OpentelemetryStatifier.Persistence.setup/1` to keep every adapter call span.
 
 ## [0.9.2] 2026-10-08
 
