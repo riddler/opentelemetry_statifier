@@ -76,9 +76,10 @@ Must change: **NONE** for a host with no query, alert or code that reads
 - **If you read failed durable steps in your backend's exception view**,
   the step span a raise, throw or exit closes now carries an `exception`
   span event with `exception.type` (`"Elixir.RuntimeError"` for an
-  `:error`, `"<kind>:<reason>"` for a throw or an exit) and
-  `exception.stacktrace`, the frames `statifier_persistence` narrowed,
-  one per line. There is no `exception.message`. The span's error status
+  `:error`, `"<kind>:<reason>"` for a throw or an exit) and, when the
+  step's failure carried frames, `exception.stacktrace`, the frames
+  `statifier_persistence` narrowed, one per line; when it carried none,
+  the event has no `exception.stacktrace`. There is no `exception.message`. The span's error status
   message and its `kind` and `reason` attributes are unchanged from 0.7.0.
 
 ## 0.8 to 0.9
