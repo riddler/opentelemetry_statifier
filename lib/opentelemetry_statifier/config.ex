@@ -1,19 +1,25 @@
 defmodule OpentelemetryStatifier.Config do
   @moduledoc """
-  The validated result of `OpentelemetryStatifier.setup/1`'s options,
-  carried through `:telemetry.attach/4` as the handler `Config` argument
-  (the family's unanimous pattern for setup-time options - see the plan's
-  Key Discoveries).
+  The validated result of the options `OpentelemetryStatifier.setup/1`,
+  `OpentelemetryStatifier.Persistence.setup/1` and
+  `OpentelemetryStatifier.Oban.setup/1` take, carried through
+  `:telemetry.attach/4` as each handler's `Config` argument (the family's
+  pattern for setup-time options).
 
   Two keys are recognised:
 
-    * `:record_datamodel_values` - defaults to `false`. Parsed and carried
-      here; not yet read anywhere (`ots-j82` reads it once the datamodel
-      effect events are mapped).
-    * `:table` - the ETS table name the handler reads and writes against.
-      Defaults to `OpentelemetryStatifier.SpanTable`, the module name
-      standing in for the table name until Phase 2 gives that name a real
-      table.
+    * `:record_datamodel_values` - defaults to `false`. When `true`,
+      `OpentelemetryStatifier.Attributes` records the datamodel values an
+      event carries (`:new_value`, `:prior_value` and `:datamodel`) as
+      span-event attributes rendered with `inspect/1`; when `false`, they
+      are left out.
+    * `:table` - the name of the ETS span table the handlers read and
+      write. Defaults to `OpentelemetryStatifier.SpanTable`, the named
+      table the `OpentelemetryStatifier.SpanTable` process creates when the
+      application starts and sweeps on a timer. Any other name must name a
+      table that already exists, created with
+      `OpentelemetryStatifier.SpanTable.new_table/1`; the timed sweep runs
+      over the default table only.
 
   An unknown key is rejected rather than ignored: a typo'd
   `record_datamodel_value` silently doing nothing is exactly the failure
