@@ -29,6 +29,12 @@ nothing to: `[:statifier_persistence, :execution, :step, :exception]`,
 `[..., :execution, :unparked]`. `OpentelemetryStatifier.Persistence.events/0`
 grows from 16 names to 20.
 
+Each of the four is heard only from a `statifier_persistence` release that
+emits it: `[..., :execution, :migrated]` first appeared in 0.14.0,
+`[..., :step, :exception]` and `[..., :execution, :unparked]` in 0.15.1,
+and `[..., :step, :reentered]` in 0.18.0. Against an earlier release the
+bridge attaches to the name and hears nothing.
+
 Must change: **NONE**. Every span, span event and attribute 0.6.0 exported
 keeps its name and its shape.
 
