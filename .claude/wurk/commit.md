@@ -66,7 +66,9 @@ release prep* row allows the tag only once the release bead's bump is
 merged to `origin/main`, naming that version at the merged commit, and its **Release preps**
 paragraph says the conductor or the session that owns the release bead tags
 it. Its *release (`mix hex.publish`, GitHub release)* row allows those never:
-publishing is the operator's. So at ordinary
+the release workflow publishes on the tag push (ADR-0005): an agent or a
+session never runs `mix hex.publish`, and a failed workflow is re-run from
+its Actions page. So at ordinary
 commit time the answer is unchanged: never edit the version field as part of
 a commit that is not a release prep. `.claude/wurk/release.md` is the recipe
 for the one case where it moves.
